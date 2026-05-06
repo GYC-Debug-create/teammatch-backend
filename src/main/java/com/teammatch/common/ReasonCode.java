@@ -22,6 +22,14 @@ public enum ReasonCode {
     TARGET_NOT_MEMBER("M5103", "被评价人不是项目成员"),
     EVALUATOR_NOT_MEMBER("M5104", "评价人不是项目成员"),
 
+    // 内容校验级错误（M52xx）
+    SCORE_FIELD_MISSING("M5201", "评分字段缺失"),
+    SCORE_OUT_OF_RANGE("M5202", "评分超出范围"),
+    COMMENT_CONTAINS_VIOLATION("M5203", "评论包含违规词"),
+    HIGH_SCORE_MISSING_POSITIVE_TAG("M5204", "高分缺少正向标签"),
+    LOW_SCORE_MISSING_NEGATIVE_TAG("M5205", "低分缺少负向标签"),
+    LOW_SCORE_COMMENT_EMPTY("M5206", "低分评论为空"),
+
     // 通用错误
     UNKNOWN_ERROR("M9999", "未知错误");
 
