@@ -17,55 +17,65 @@ public class CreditRuleServiceImpl implements CreditRuleService {
     private final CreditChangeMapper creditChangeMapper;
 
     /**
-     * 评分到 delta 映射算法 (简单平均分映射):
-     * 四个维度的满分通常是5分，计算平均分 avg
-     * avg >= 4.5 -> +5 分
-     * avg >= 4.0 -> +3 分
-     * avg >= 3.0 -> 0 分
-     * avg <  3.0 -> -3 分
-     * avg <  2.0 -> -5 分
-     * 注：若后续需要修改映射表，可以直接调整此处阈值
+     * V2.1 八区间映射算法:
+     * [1.0, 1.5) -> -5
+     * [1.5, 2.0) -> -3
+     * [2.0, 2.5) -> -2
+     * [2.5, 3.0) -> -1
+     * [3.0, 3.5) -> 0
+     * [3.5, 4.0) -> +2
+     * [4.0, 4.5) -> +3
+     * [4.5, 5.0] -> +5
      */
     @Override
     public int calculateDeltaFromEvaluation(Evaluation evaluation) {
-        int totalScore = evaluation.getCommunicationScore() + 
-                         evaluation.getTaskScore() + 
-                         evaluation.getSkillScore() + 
+        int totalScore = evaluation.getCommunicationScore() +
+                         evaluation.getTaskScore() +
+                         evaluation.getSkillScore() +
                          evaluation.getResponsibilityScore();
         double avg = totalScore / 4.0;
-        
+        return mapAverageScoreToDelta(avg);
+    }
+
+    @Override
+    public int mapAverageScoreToDelta(double avg) {
         if (avg >= 4.5) return 5;
         if (avg >= 4.0) return 3;
+        if (avg >= 3.5) return 2;
         if (avg >= 3.0) return 0;
-        if (avg >= 2.0) return -3;
+        if (avg >= 2.5) return -1;
+        if (avg >= 2.0) return -2;
+        if (avg >= 1.5) return -3;
         return -5;
+    }
+
+    @Override
+    public int getExistingProjectDelta(Long userId, Long projectId) {
+        List<CreditChange> changes = creditChangeMapper.selectList(new LambdaQueryWrapper<CreditChange>()
+                .eq(CreditChange::getUserId, userId)
+                .eq(CreditChange::getProjectId, projectId)
+                .eq(CreditChange::getChangeType, "evaluation")
+                .eq(CreditChange::getEffective, true));
+
+        int total = 0;
+        for (CreditChange cc : changes) {
+            total += cc.getChangeValue();
+        }
+        return total;
     }
 
     @Override
     public int calculateCappedDelta(Long userId, Long projectId, int proposedDelta) {
         if (proposedDelta == 0) return 0;
 
-        // 获取用户在该项目下已生效所有的信誉变动和
-        List<CreditChange> changes = creditChangeMapper.selectList(new LambdaQueryWrapper<CreditChange>()
-                .eq(CreditChange::getUserId, userId)
-                .eq(CreditChange::getSourceType, "evaluation")
-                .eq(CreditChange::getProjectId, projectId) 
-                .eq(CreditChange::getEffective, true));
-                
-        int currentTotalDelta = 0;
-        for (CreditChange cc : changes) {
-            currentTotalDelta += cc.getChangeValue();
-        }
+        int currentTotalDelta = getExistingProjectDelta(userId, projectId);
 
-        // 判断截断
         int maxAllowed = 10;
         int targetTotal = currentTotalDelta + proposedDelta;
 
         if (targetTotal > maxAllowed) {
-            // 正向截断：如果当前已经积了 8 分，新来了 5 分 -> 只能再加 2 分
             return Math.max(0, maxAllowed - currentTotalDelta);
         } else if (targetTotal < -maxAllowed) {
-            // 负向截断：如果当前扣了 -8 分，新来了 -5 分 -> 只能再扣 -2 分
             return Math.min(0, -maxAllowed - currentTotalDelta);
         }
 

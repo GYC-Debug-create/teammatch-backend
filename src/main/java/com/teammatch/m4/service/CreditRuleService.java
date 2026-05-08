@@ -4,7 +4,7 @@ import java.util.List;
 import com.teammatch.entity.Evaluation;
 
 public interface CreditRuleService {
-    
+
     /**
      * T-088 评分到 delta 映射服务
      * 将四维评分映射为最终的信誉分增减 (-5 ~ +5)
@@ -16,4 +16,15 @@ public interface CreditRuleService {
      * 校验本次变动加上当前项目已有的信誉变动，是否超出了 ±10 分的封顶限制，并返回截断后的有效信誉分变动
      */
     int calculateCappedDelta(Long userId, Long projectId, int proposedDelta);
+
+    /**
+     * M5-3 平均分到 delta 映射（V2.1 八区间）
+     * 将四维评分平均值映射为信誉分增减 (-5 ~ +5)
+     */
+    int mapAverageScoreToDelta(double avg);
+
+    /**
+     * M5-3 查询用户在指定项目的已有 evaluation 类 effective credit_change 累计值
+     */
+    int getExistingProjectDelta(Long userId, Long projectId);
 }
