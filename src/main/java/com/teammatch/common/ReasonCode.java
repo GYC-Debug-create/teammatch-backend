@@ -10,6 +10,11 @@ import java.util.Map;
 public enum ReasonCode {
     SUCCESS("00000", "成功"),
 
+    // 通用错误（M10xx）
+    PARAM_ERROR("M1001", "参数错误"),
+    NOT_FOUND("M1002", "资源不存在"),
+    STATUS_CONFLICT("M1003", "状态冲突"),
+
     // 项目级错误（M50xx）
     NOT_PROJECT_MEMBER("M5001", "用户不是该项目成员"),
     PROJECT_NOT_ENDED("M5002", "项目尚未结束"),
