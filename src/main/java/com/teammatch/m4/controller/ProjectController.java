@@ -7,17 +7,19 @@ import com.teammatch.m4.entity.Project;
 import com.teammatch.m4.entity.TeamMember;
 import com.teammatch.m4.service.ProjectService;
 import com.teammatch.m4.service.TeamMemberService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/m4/projects")
-@RequiredArgsConstructor
 public class ProjectController {
 
-    private final ProjectService projectService;
-    private final TeamMemberService teamMemberService;
+    @Autowired
+    private ProjectService projectService;
+
+    @Autowired
+    private TeamMemberService teamMemberService;
 
     /** T-113 创建项目 */
     @PostMapping

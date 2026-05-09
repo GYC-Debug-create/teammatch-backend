@@ -13,7 +13,7 @@ import com.teammatch.m4.entity.Project;
 import com.teammatch.m4.service.ExitVoteService;
 import com.teammatch.m4.service.ProjectService;
 import com.teammatch.m4.service.TeamMemberService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +24,16 @@ import java.util.List;
  * T-136~T-141: 退出流程实现
  */
 @Service
-@RequiredArgsConstructor
 public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote> implements ExitVoteService {
 
-    private final M4ExitVoteRecordMapper exitVoteRecordMapper;
-    private final TeamMemberService teamMemberService;
-    private final ProjectService projectService;
+    @Autowired
+    private M4ExitVoteRecordMapper exitVoteRecordMapper;
+
+    @Autowired
+    private TeamMemberService teamMemberService;
+
+    @Autowired
+    private ProjectService projectService;
 
     // ------------------------------------------------------------------ T-136
     /**

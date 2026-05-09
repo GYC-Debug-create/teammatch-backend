@@ -4,17 +4,17 @@ import com.teammatch.dto.CreditCalculationResult;
 import com.teammatch.entity.Evaluation;
 import com.teammatch.m4.service.CreditRuleService;
 import com.teammatch.service.CreditCalculationService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 @Service
-@RequiredArgsConstructor
 public class CreditCalculationServiceImpl implements CreditCalculationService {
 
-    private final CreditRuleService creditRuleService;
+    @Autowired
+    private CreditRuleService creditRuleService;
 
     @Override
     public CreditCalculationResult calculate(Evaluation evaluation) {

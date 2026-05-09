@@ -2,16 +2,16 @@ package com.teammatch.m4.controller;
 
 import com.teammatch.m4.dto.TeamRequestDTO;
 import com.teammatch.m4.service.TeamRequestService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/m4/team-requests")
-@RequiredArgsConstructor
 public class TeamRequestController {
 
-    private final TeamRequestService teamRequestService;
+    @Autowired
+    private TeamRequestService teamRequestService;
 
     /** T-122 队长发送邀请 */
     @PostMapping("/invite")
