@@ -1,6 +1,7 @@
 package com.teammatch.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.teammatch.common.ReasonCode;
 import com.teammatch.dto.LoginRequest;
 import com.teammatch.dto.PasswordRequest;
 import com.teammatch.dto.SendEmailCodeRequest;
@@ -81,13 +82,18 @@ public class AuthServiceImpl implements AuthService {
             User existingUser = userMapper.selectOne(wrapper);
             
             if (existingUser != null && !existingUser.getId().equals(userId)) {
-                throw new RuntimeException("该邮箱已被其他用户绑定");
+                throw new RuntimeException(ReasonCode.EMAIL_OCCUPIED.getMessage());
             }
             
             User user = userMapper.selectById(userId);
             if (user != null) {
                 user.setEmail(request.getEmail());
                 user.setEmailVerified(true);
+                
+                // 【实习要点4】邮箱验证成功后，重新计算正式档案状态
+                // 避免用户先填写档案再验证邮箱时，formalProfileCompleted 没有更新
+                checkAndUpdateFormalProfile(user);
+                
                 userMapper.updateById(user);
             }
             return true;
@@ -96,12 +102,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void adminCreatePassword(PasswordRequest request) {
+    public void adminCreatePassword(PasswordRequest request, String token) {
+        // 【实习要点1】管理员权限校验：任何管理端接口都必须验证当前用户是否为管理员
+        // 面试时可以说："我实现了基于角色的访问控制（RBAC），确保只有管理员才能操作敏感数据"
+        Long adminId = getUserIdFromToken(token);
+        User admin = userMapper.selectById(adminId);
+        if (admin == null || !"admin".equals(admin.getRole())) {
+            throw new RuntimeException(ReasonCode.ADMIN_REQUIRED.getMessage());
+        }
+        
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
             throw new RuntimeException("用户名不能为空");
         }
         if (request.getPassword() == null || request.getPassword().length() < 6) {
-            throw new RuntimeException("密码长度不能少于 6 位");
+            throw new RuntimeException(ReasonCode.PASSWORD_TOO_SHORT.getMessage());
         }
         
         // 检查用户是否已存在
@@ -128,12 +142,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void adminUpdatePassword(PasswordRequest request) {
+    public void adminUpdatePassword(PasswordRequest request, String token) {
+        // 【实习要点1】管理员权限校验
+        Long adminId = getUserIdFromToken(token);
+        User admin = userMapper.selectById(adminId);
+        if (admin == null || !"admin".equals(admin.getRole())) {
+            throw new RuntimeException(ReasonCode.ADMIN_REQUIRED.getMessage());
+        }
+        
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
             throw new RuntimeException("用户名不能为空");
         }
         if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
-            throw new RuntimeException("新密码长度不能少于 6 位");
+            throw new RuntimeException(ReasonCode.PASSWORD_TOO_SHORT.getMessage());
         }
         
         // 查找用户
@@ -148,7 +169,7 @@ public class AuthServiceImpl implements AuthService {
         // 如果提供了旧密码，需要验证旧密码是否正确
         if (request.getOldPassword() != null && !request.getOldPassword().isEmpty()) {
             if (user.getPasswordHash() == null || !PASSWORD_ENCODER.matches(request.getOldPassword(), user.getPasswordHash())) {
-                throw new RuntimeException("旧密码不正确");
+                throw new RuntimeException(ReasonCode.OLD_PASSWORD_INCORRECT.getMessage());
             }
         }
         
@@ -172,7 +193,7 @@ public class AuthServiceImpl implements AuthService {
         
         // 如果已经绑定过 username，不允许重复绑定
         if (user.getUsername() != null && !user.getUsername().isEmpty()) {
-            throw new RuntimeException("用户名已绑定，请使用修改接口");
+            throw new RuntimeException(ReasonCode.USERNAME_ALREADY_BOUND.getMessage());
         }
         
         // 检查用户名是否已被其他用户占用
@@ -181,7 +202,7 @@ public class AuthServiceImpl implements AuthService {
         User existingUser = userMapper.selectOne(wrapper);
         
         if (existingUser != null && !existingUser.getId().equals(userId)) {
-            throw new RuntimeException("该用户名已被占用");
+            throw new RuntimeException(ReasonCode.USERNAME_OCCUPIED.getMessage());
         }
         
         user.setUsername(request.getUsername());
@@ -251,5 +272,23 @@ public class AuthServiceImpl implements AuthService {
         redisTemplate.opsForValue().set(TOKEN_PREFIX + token, String.valueOf(user.getId()), 7, TimeUnit.DAYS);
         
         return token;
+    }
+
+    /**
+     * 【实习要点4】检查并更新正式档案状态
+     * 在以下场景调用：
+     * 1. 邮箱验证成功后
+     * 2. 更新个人档案后
+     * 
+     * 正式档案完成条件：
+     * - 邮箱已验证
+     * - 昵称不为空
+     * - 学校不为空
+     */
+    private void checkAndUpdateFormalProfile(User user) {
+        boolean completed = Boolean.TRUE.equals(user.getEmailVerified()) &&
+                user.getNickname() != null && !user.getNickname().isEmpty() &&
+                user.getSchool() != null && !user.getSchool().isEmpty();
+        user.setFormalProfileCompleted(completed);
     }
 }

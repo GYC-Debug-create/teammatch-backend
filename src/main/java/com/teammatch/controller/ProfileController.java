@@ -3,13 +3,17 @@ package com.teammatch.controller;
 import com.teammatch.common.Result;
 import com.teammatch.dto.AddSkillTagRequest;
 import com.teammatch.dto.UpdateProfileRequest;
+import com.teammatch.dto.UpdateUserSkillsRequest;
 import com.teammatch.entity.SkillTag;
 import com.teammatch.entity.User;
 import com.teammatch.service.ProfileService;
 import com.teammatch.service.impl.AuthServiceImpl;
 import io.jsonwebtoken.Jwts;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * M3 个人档案控制器
@@ -78,7 +82,7 @@ public class ProfileController {
     }
 
     /**
-     * F. 添加技能标签
+     * F. 添加技能标签（旧接口，保留兼容）
      * 路径: POST /api/profile/skills/add
      */
     @PostMapping("/skills/add")
@@ -88,6 +92,32 @@ public class ProfileController {
         Long skillTagId = params.get("skillTagId");
         profileService.addSkill(userId, skillTagId);
         return Result.success(null);
+    }
+
+    /**
+     * F1. 全量替换用户技能（新接口，推荐使用）
+     * 路径: PUT /api/profile/skills
+     * 
+     * 【实习要点3】全量替换模式：前端提交最终的技能列表，后端先删除旧的再插入新的
+     */
+    @PutMapping("/skills")
+    public Result<Void> updateUserSkills(@Valid @RequestBody UpdateUserSkillsRequest request,
+                                         @RequestHeader("Authorization") String token) {
+        Long userId = getUserIdFromToken(token);
+        profileService.updateUserSkills(userId, request.getSkillTagIds());
+        return Result.success(null);
+    }
+
+    /**
+     * F2. 获取所有可用的技能标签列表
+     * 路径: GET /api/profile/skills/tags
+     * 
+     * 【实习要点3】预置字典模式：技能标签由系统预置，用户只能从中选择
+     */
+    @GetMapping("/skills/tags")
+    public Result<List<SkillTag>> listSkillTags() {
+        List<SkillTag> tags = profileService.listActiveSkillTags();
+        return Result.success(tags);
     }
 
     /**

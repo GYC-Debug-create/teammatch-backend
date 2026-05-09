@@ -53,21 +53,21 @@ Authorization: Bearer <JWT Token>  (需要认证的接口)
   "code": "00000",
   "message": "成功",
   "data": {
-    "token": "<REDACTED>",
-    "user": {
-      "id": 1,
-      "openid": "test_openid_123",
-      "nickname": "User_test_",
-      "email": null,
-      "emailVerified": false,
-      "creditScore": 100,
-      "role": "user",
-      "status": "active"
-    }
+    "id": 1,
+    "nickname": "User_test_",
+    "avatarUrl": null,
+    "emailVerified": false,
+    "formalProfileCompleted": false,
+    "creditScore": 100,
+    "token": "<REDACTED>"
   },
   "success": true
 }
 ```
+
+**注意**: 
+- 返回的是 `LoginResponse` DTO，不包含敏感字段（passwordHash、role、status等）
+- `formalProfileCompleted` 表示正式档案是否完成（邮箱验证 + 昵称 + 学校）
 
 ---
 
@@ -133,7 +133,12 @@ Authorization: Bearer <Token>
 #### 4. 管理员创建用户密码
 **接口**: `POST /api/auth/password/create`
 
-**说明**: 为新用户设置密码，若用户不存在则自动创建。
+**说明**: 为新用户设置密码，若用户不存在则自动创建。**需要管理员权限**。
+
+**请求 Headers**:
+```
+Authorization: Bearer <管理员Token>
+```
 
 **请求 Body**:
 ```json
@@ -154,7 +159,8 @@ Authorization: Bearer <Token>
 ```
 
 **业务规则**:
-- 密码长度至少 6 位
+- **需要管理员权限**（role=admin），非管理员返回 `M3009` 错误
+- 密码长度至少 6 位，否则返回 `M3007` 错误
 - 若用户已设置密码，会提示使用修改接口
 - 密码使用 BCrypt 加密存储
 
@@ -163,7 +169,12 @@ Authorization: Bearer <Token>
 #### 5. 管理员修改用户密码
 **接口**: `POST /api/auth/password/update`
 
-**说明**: 修改已有用户的密码，可选择验证旧密码。
+**说明**: 修改已有用户的密码，可选择验证旧密码。**需要管理员权限**。
+
+**请求 Headers**:
+```
+Authorization: Bearer <管理员Token>
+```
 
 **请求 Body**:
 ```json
@@ -185,8 +196,9 @@ Authorization: Bearer <Token>
 ```
 
 **业务规则**:
-- 若提供 `oldPassword`，会先校验旧密码是否正确
-- 新密码长度至少 6 位
+- **需要管理员权限**（role=admin），非管理员返回 `M3009` 错误
+- 若提供 `oldPassword`，会先校验旧密码是否正确，错误返回 `M3008`
+- 新密码长度至少 6 位，否则返回 `M3007` 错误
 
 ---
 
@@ -219,8 +231,8 @@ Authorization: Bearer <Token>
 
 **业务规则**:
 - 用户名不能为空
-- 若已绑定过用户名，提示使用修改接口
-- 检查用户名是否被其他用户占用
+- 若已绑定过用户名，返回 `M3006` 错误，提示使用修改接口
+- 检查用户名是否被其他用户占用，占用返回 `M3005` 错误
 
 ---
 
@@ -318,10 +330,80 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 3. 添加技能标签（用户）
+#### 3. 全量替换用户技能（推荐）
+**接口**: `PUT /api/profile/skills`
+
+**说明**: 全量替换用户的技能标签列表。先删除旧技能，再插入新技能。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求 Body**:
+```json
+{
+  "skillTagIds": [1, 2, 3]
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": null,
+  "success": true
+}
+```
+
+**业务规则**:
+- 传入空数组 `[]` 表示清空所有技能
+- 所有 skillTagId 必须在 `skill_tag` 表中存在且状态为 `active`
+- 若技能标签不存在或已禁用，返回 `M3010` 错误
+
+---
+
+#### 4. 获取技能标签列表
+**接口**: `GET /api/profile/skills/tags`
+
+**说明**: 获取所有激活状态的技能标签列表，供前端展示可选技能。
+
+**请求**: 无需 Token（公开接口）
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": [
+    {
+      "id": 1,
+      "name": "Java",
+      "category": "language",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "name": "Spring Boot",
+      "category": "framework",
+      "status": "active"
+    }
+  ],
+  "success": true
+}
+```
+
+**业务规则**:
+- 只返回 `status='active'` 的技能标签
+- 按 `category` 和 `name` 排序
+
+---
+
+#### 5. 添加技能标签（用户，旧接口）
 **接口**: `POST /api/profile/skills/add`
 
-**说明**: 为当前用户添加一个技能标签。技能标签必须先在 `skill_tag` 表中存在且状态为 `active`。
+**说明**: 为当前用户增量添加一个技能标签（保留兼容，推荐使用全量替换接口）。
 
 **请求 Headers**:
 ```
@@ -352,7 +434,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 4. 添加技能标签（管理员）
+#### 6. 添加技能标签（管理员）
 **接口**: `POST /api/profile/skills/tag/add`
 
 **说明**: 向数据库插入新的技能标签，供后续用户关联使用。
@@ -472,11 +554,15 @@ Authorization: Bearer <Token>
 
 5. **添加技能标签**
    ```bash
-   # 先添加技能标签到数据库
-   POST /api/profile/skills/tag/add
-   Body: { "name": "Java", "category": "编程语言" }
+   # 先获取所有可用技能标签
+   GET /api/profile/skills/tags
    
-   # 为用户添加技能
+   # 全量替换用户技能（推荐）
+   PUT /api/profile/skills
+   Headers: Authorization: Bearer <Token>
+   Body: { "skillTagIds": [1, 2, 3] }
+   
+   # 或者使用旧接口增量添加（不推荐）
    POST /api/profile/skills/add
    Headers: Authorization: Bearer <Token>
    Body: { "skillTagId": 1 }
@@ -513,12 +599,28 @@ Authorization: Bearer <Token>
 
 ## 错误码说明
 
+### 通用错误码
 | 错误码 | 说明 |
 |--------|------|
 | 00000 | 成功 |
-| 99999 | 未知错误 |
-| 401 | 未授权（Token 无效或过期） |
-| 404 | 资源不存在 |
+| M1001 | 参数错误 |
+| M1002 | 资源不存在 |
+| M1003 | 状态冲突 |
+| M9999 | 未知错误 |
+
+### M3 模块专用错误码
+| 错误码 | 说明 | 触发场景 |
+|--------|------|----------|
+| M3001 | 需要先完成正式档案 | 访问需要正式档案的接口 |
+| M3002 | 该邮箱已被其他用户绑定 | 邮箱验证时邮箱已被占用 |
+| M3003 | 验证码错误或已过期 | 邮箱验证码不正确 |
+| M3004 | 发送验证码过于频繁 | 短时间内多次发送验证码 |
+| M3005 | 该用户名已被占用 | 绑定/修改用户名时重复 |
+| M3006 | 用户名已绑定，请使用修改接口 | 重复调用 bind 接口 |
+| M3007 | 密码长度不能少于6位 | 密码太短 |
+| M3008 | 旧密码不正确 | 修改密码时旧密码错误 |
+| M3009 | 需要管理员权限 | 非管理员调用管理接口 |
+| M3010 | 技能标签不存在或已禁用 | 使用无效的技能ID |
 
 ---
 
@@ -566,11 +668,14 @@ mvn spring-boot:run
 
 ## 注意事项
 
-1. **Lombok 已禁用**：所有实体类和 DTO 均使用手动编写的 Getter/Setter
+1. **Lombok 已启用**：实体类和 DTO 使用 `@Data` 注解自动生成 Getter/Setter
 2. **密码加密**：所有密码使用 BCrypt 加密存储，不可逆
 3. **JWT 密钥**：当前使用固定密钥，生产环境建议改为环境变量
 4. **Redis 依赖**：邮箱验证码存储在 Redis 中，确保 Redis 服务已启动
 5. **数据库编码**：JDBC URL 使用 `utf8` 编码，避免 utf8mb4 兼容性问题
+6. **管理员权限**：密码管理接口需要 role=admin 的 Token，否则返回 M3009 错误
+7. **登录响应**：登录接口返回 `LoginResponse` DTO，不包含敏感字段（passwordHash、role等）
+8. **技能标签**：推荐使用全量替换接口 `PUT /api/profile/skills`，旧接口保留兼容
 
 ---
 
