@@ -4,7 +4,7 @@ import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
 import com.teammatch.m4.entity.ExitVote;
 import com.teammatch.m4.service.ExitVoteService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/m4/projects/{projectId}/exit")
+@RequiredArgsConstructor
 public class ExitVoteController {
 
-    @Autowired
-    private ExitVoteService exitVoteService;
+    private final ExitVoteService exitVoteService;
 
     /**
      * T-136: 成员主动退出

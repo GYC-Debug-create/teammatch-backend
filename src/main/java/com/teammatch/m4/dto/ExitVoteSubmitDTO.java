@@ -11,9 +11,4 @@ public class ExitVoteSubmitDTO {
     private Long voterId;
     /** agree / disagree */
     private String choice;
-
-    public Long getVoterId() { return voterId; }
-    public void setVoterId(Long voterId) { this.voterId = voterId; }
-    public String getChoice() { return choice; }
-    public void setChoice(String choice) { this.choice = choice; }
 }

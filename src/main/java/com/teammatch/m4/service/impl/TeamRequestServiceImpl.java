@@ -10,7 +10,7 @@ import com.teammatch.m4.mapper.M4TeamRequestMapper;
 import com.teammatch.m4.service.ProjectService;
 import com.teammatch.m4.service.TeamMemberService;
 import com.teammatch.m4.service.TeamRequestService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +18,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class TeamRequestServiceImpl extends ServiceImpl<M4TeamRequestMapper, TeamRequest> implements TeamRequestService {
 
-    @Autowired
-    private ProjectService projectService;
-
-    @Autowired
-    private TeamMemberService teamMemberService;
+    private final ProjectService projectService;
+    private final TeamMemberService teamMemberService;
 
     /**
      * T-122/T-123: 发送邀请/申请，含 T-133 拦截：

@@ -5,16 +5,16 @@ import com.teammatch.entity.CreditChange;
 import com.teammatch.entity.Evaluation;
 import com.teammatch.m4.service.CreditRuleService;
 import com.teammatch.mapper.CreditChangeMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class CreditRuleServiceImpl implements CreditRuleService {
 
-    @Autowired
-    private CreditChangeMapper creditChangeMapper;
+    private final CreditChangeMapper creditChangeMapper;
 
     /**
      * V2.1 八区间映射算法:
