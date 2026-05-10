@@ -15,6 +15,18 @@ public enum ReasonCode {
     NOT_FOUND("M1002", "资源不存在"),
     STATUS_CONFLICT("M1003", "状态冲突"),
 
+    // M3 认证与档案错误（M30xx）
+    FORMAL_PROFILE_REQUIRED("M3001", "需要先完成正式档案"),
+    EMAIL_OCCUPIED("M3002", "该邮箱已被其他用户绑定"),
+    INVALID_CODE("M3003", "验证码错误或已过期"),
+    SEND_CODE_TOO_FREQUENT("M3004", "发送验证码过于频繁"),
+    USERNAME_OCCUPIED("M3005", "该用户名已被占用"),
+    USERNAME_ALREADY_BOUND("M3006", "用户名已绑定，请使用修改接口"),
+    PASSWORD_TOO_SHORT("M3007", "密码长度不能少于6位"),
+    OLD_PASSWORD_INCORRECT("M3008", "旧密码不正确"),
+    ADMIN_REQUIRED("M3009", "需要管理员权限"),
+    SKILL_TAG_NOT_FOUND("M3010", "技能标签不存在或已禁用"),
+
     // 项目级错误（M50xx）
     NOT_PROJECT_MEMBER("M5001", "用户不是该项目成员"),
     PROJECT_NOT_ENDED("M5002", "项目尚未结束"),

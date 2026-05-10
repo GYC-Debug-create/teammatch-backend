@@ -1,6 +1,7 @@
 package com.teammatch.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.teammatch.common.ReasonCode;
 import com.teammatch.entity.SkillTag;
 import com.teammatch.entity.User;
 import com.teammatch.entity.UserSkill;
@@ -43,6 +44,7 @@ public class ProfileServiceImpl implements ProfileService {
         if (profile.getGrade() != null) user.setGrade(profile.getGrade());
         if (profile.getBio() != null) user.setBio(profile.getBio());
 
+        // 【实习要点4】更新档案后，重新计算正式档案状态
         checkFormalProfile(user);
         userMapper.updateById(user);
     }
@@ -99,5 +101,46 @@ public class ProfileServiceImpl implements ProfileService {
         }
         skillTag.setStatus("active");
         skillTagMapper.insert(skillTag);
+    }
+
+    @Override
+    @Transactional
+    public void updateUserSkills(Long userId, List<Long> skillTagIds) {
+        // 【实习要点3】全量替换模式：先删除旧的技能，再插入新的
+        
+        // 1. 删除用户的所有旧技能
+        LambdaQueryWrapper<UserSkill> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(UserSkill::getUserId, userId);
+        userSkillMapper.delete(deleteWrapper);
+        
+        // 2. 如果传入空列表，表示清空所有技能，直接返回
+        if (skillTagIds == null || skillTagIds.isEmpty()) {
+            return;
+        }
+        
+        // 3. 验证所有技能标签是否存在且为 active 状态
+        for (Long skillTagId : skillTagIds) {
+            SkillTag tag = skillTagMapper.selectById(skillTagId);
+            if (tag == null || !"active".equals(tag.getStatus())) {
+                throw new RuntimeException(ReasonCode.SKILL_TAG_NOT_FOUND.getMessage());
+            }
+        }
+        
+        // 4. 批量插入新技能
+        for (Long skillTagId : skillTagIds) {
+            UserSkill userSkill = new UserSkill();
+            userSkill.setUserId(userId);
+            userSkill.setSkillTagId(skillTagId);
+            userSkillMapper.insert(userSkill);
+        }
+    }
+
+    @Override
+    public List<SkillTag> listActiveSkillTags() {
+        // 【实习要点3】预置字典模式：只返回激活状态的技能标签
+        LambdaQueryWrapper<SkillTag> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SkillTag::getStatus, "active");
+        wrapper.orderByAsc(SkillTag::getCategory, SkillTag::getName);
+        return skillTagMapper.selectList(wrapper);
     }
 }

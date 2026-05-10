@@ -29,13 +29,15 @@ public interface AuthService {
 
     /**
      * 管理员创建用户密码
+     * 需要校验当前用户是否为管理员
      */
-    void adminCreatePassword(PasswordRequest request);
+    void adminCreatePassword(PasswordRequest request, String token);
 
     /**
      * 管理员修改用户密码
+     * 需要校验当前用户是否为管理员
      */
-    void adminUpdatePassword(PasswordRequest request);
+    void adminUpdatePassword(PasswordRequest request, String token);
 
     /**
      * 用户自己设置用户名（首次绑定）

@@ -33,4 +33,16 @@ public interface ProfileService {
      * 添加新的技能标签到数据库
      */
     void addSkillTag(SkillTag skillTag);
+
+    /**
+     * 全量替换用户技能（先删除旧的，再插入新的）
+     * 【实习要点3】全量替换模式：简化前端逻辑，减少网络请求
+     */
+    void updateUserSkills(Long userId, List<Long> skillTagIds);
+
+    /**
+     * 获取所有激活的技能标签列表
+     * 【实习要点3】预置字典模式：提供可选的技能标签供前端展示
+     */
+    List<SkillTag> listActiveSkillTags();
 }
