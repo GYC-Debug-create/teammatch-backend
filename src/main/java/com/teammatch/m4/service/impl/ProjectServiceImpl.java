@@ -13,6 +13,7 @@ import com.teammatch.m4.service.ProjectService;
 import com.teammatch.m4.service.ProjectSkillService;
 import com.teammatch.m4.service.TeamMemberService;
 import com.teammatch.m4.service.TeamRequestService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -24,13 +25,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class ProjectServiceImpl extends ServiceImpl<M4ProjectMapper, Project> implements ProjectService {
 
-    @Autowired
-    private ProjectSkillService projectSkillService;
-
-    @Autowired
-    private TeamMemberService teamMemberService;
+    private final ProjectSkillService projectSkillService;
+    private final TeamMemberService teamMemberService;
 
     @Autowired
     @Lazy
