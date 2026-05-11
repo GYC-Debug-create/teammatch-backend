@@ -81,10 +81,10 @@ class EvaluationEligibilityServiceTest {
 
     // ==================== M5-1A：项目级互评入口判断 ====================
     // 等价类划分：
-    // 1. 项目不存在 → M5004
-    // 2. 用户不是成员 → M5001
-    // 3. 项目状态不是 ended → M5002
-    // 4. 超过互评截止时间 → M5003
+    // 1. 项目不存在 → PROJECT_NOT_FOUND
+    // 2. 用户不是成员 → NOT_PROJECT_MEMBER
+    // 3. 项目状态不是 ended → PROJECT_NOT_ENDED
+    // 4. 超过互评截止时间 → EVAL_WINDOW_CLOSED
     // 5. 所有检查通过 → 00000
 
     @Test
@@ -100,8 +100,8 @@ class EvaluationEligibilityServiceTest {
         // Then：验证结果
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData()).isTrue();
-        assertThat(result.getCode()).isEqualTo("00000");
-        assertThat(result.getMessage()).isEqualTo("成功");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.SUCCESS.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.SUCCESS.getMessage());
 
         // 验证 Mock 方法被调用
         verify(projectMapper).selectById(projectId);
@@ -119,8 +119,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5004");
-        assertThat(result.getMessage()).isEqualTo("项目不存在");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.PROJECT_NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.PROJECT_NOT_FOUND.getMessage());
         assertThat(result.getData()).isNull();
 
         // 验证后续方法没有被调用（短路）
@@ -140,8 +140,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5001");
-        assertThat(result.getMessage()).isEqualTo("用户不是该项目成员");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.NOT_PROJECT_MEMBER.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.NOT_PROJECT_MEMBER.getMessage());
 
         // 验证调用顺序
         verify(projectMapper).selectById(projectId);
@@ -161,8 +161,9 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5002");
-        assertThat(result.getMessage()).isEqualTo("项目尚未结束");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.PROJECT_NOT_ENDED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.PROJECT_NOT_ENDED.getMessage());
+        verify(projectMapper, never()).updateStatusToEvalClosed(any());
     }
 
     @Test
@@ -178,8 +179,9 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5003");
-        assertThat(result.getMessage()).isEqualTo("互评窗口已关闭");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getMessage());
+        verify(projectMapper).updateStatusToEvalClosed(projectId);
     }
 
     @Test
@@ -195,8 +197,9 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5003");
-        assertThat(result.getMessage()).isEqualTo("互评窗口已关闭");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getMessage());
+        verify(projectMapper, never()).updateStatusToEvalClosed(any());
     }
 
     // ==================== M5-1B：待评价成员列表判断 ====================
@@ -336,7 +339,7 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5004");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.PROJECT_NOT_FOUND.getCode());
 
         // 验证后续方法没有被调用（短路）
         verify(teamMemberMapper, never()).findActiveMembers(any());
@@ -344,12 +347,32 @@ class EvaluationEligibilityServiceTest {
         verify(userMapper, never()).findByIds(any());
     }
 
+    @Test
+    @DisplayName("M5-1B：互评窗口过期时通过资格检查路径触发项目懒关闭")
+    void testGetEvaluatableMembers_EvalWindowClosedLazyClose() {
+        // Given
+        project.setEvalDeadline(LocalDateTime.now().minusDays(1));
+        when(projectMapper.selectById(projectId)).thenReturn(project);
+        when(teamMemberMapper.findActiveMember(userId, projectId)).thenReturn(teamMember);
+
+        // When
+        Result<List<EvaluatableMemberDTO>> result =
+            service.getEvaluatableMembers(userId, projectId);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        verify(projectMapper).updateStatusToEvalClosed(projectId);
+        verify(teamMemberMapper, never()).findActiveMembers(any());
+        verify(evaluationMapper, never()).findEvaluatedTargetIds(any(), any());
+    }
+
     // ==================== M5-1C：最终提交前资格兜底校验 ====================
     // 等价类划分：
-    // 1. 自评（evaluatorId == targetId） → M5101
-    // 2. 重复评价 → M5102
-    // 3. 评价人不是成员 → M5104
-    // 4. 被评价人不是成员 → M5103
+    // 1. 自评（evaluatorId == targetId） → SELF_EVALUATION
+    // 2. 重复评价 → ALREADY_EVALUATED
+    // 3. 评价人不是成员 → NOT_PROJECT_MEMBER
+    // 4. 被评价人不是成员 → TARGET_NOT_PROJECT_MEMBER
     // 5. 项目级资格检查失败 → 返回对应错误码
     // 6. 所有检查通过 → 00000
 
@@ -406,8 +429,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5101");
-        assertThat(result.getMessage()).isEqualTo("不允许自评");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.SELF_EVALUATION.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.SELF_EVALUATION.getMessage());
 
         // 验证后续检查没有执行（短路）
         verify(evaluationMapper, never()).findEvaluation(any(), any(), any());
@@ -430,8 +453,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5102");
-        assertThat(result.getMessage()).isEqualTo("重复评价");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.ALREADY_EVALUATED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.ALREADY_EVALUATED.getMessage());
 
         // 验证后续检查没有执行
         verify(teamMemberMapper, never()).findActiveMember(any(), any());
@@ -456,8 +479,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5104");
-        assertThat(result.getMessage()).isEqualTo("评价人不是项目成员");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.NOT_PROJECT_MEMBER.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.NOT_PROJECT_MEMBER.getMessage());
     }
 
     @Test
@@ -482,8 +505,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5103");
-        assertThat(result.getMessage()).isEqualTo("被评价人不是项目成员");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.TARGET_NOT_PROJECT_MEMBER.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.TARGET_NOT_PROJECT_MEMBER.getMessage());
     }
 
     @Test
@@ -511,8 +534,8 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5004");
-        assertThat(result.getMessage()).isEqualTo("项目不存在");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.PROJECT_NOT_FOUND.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.PROJECT_NOT_FOUND.getMessage());
     }
 
     @Test
@@ -541,8 +564,39 @@ class EvaluationEligibilityServiceTest {
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo("M5003");
-        assertThat(result.getMessage()).isEqualTo("互评窗口已关闭");
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getMessage());
+        verify(projectMapper, never()).updateStatusToEvalClosed(any());
+    }
+
+    @Test
+    @DisplayName("M5-1C：提交前兜底检查遇到窗口过期时触发项目懒关闭")
+    void testValidateSubmission_EvalWindowClosedLazyClose() {
+        // Given
+        Long evaluatorId = 1001L;
+        Long targetId = 1002L;
+
+        when(evaluationMapper.findEvaluation(evaluatorId, targetId, projectId))
+            .thenReturn(null);
+
+        when(teamMemberMapper.findActiveMember(evaluatorId, projectId))
+            .thenReturn(teamMember);
+
+        TeamMember targetMember = createTeamMember(targetId);
+        when(teamMemberMapper.findActiveMember(targetId, projectId))
+            .thenReturn(targetMember);
+
+        project.setEvalDeadline(LocalDateTime.now().minusDays(1));
+        when(projectMapper.selectById(projectId)).thenReturn(project);
+
+        // When
+        Result<Void> result = service.validateSubmission(evaluatorId, targetId, projectId);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getMessage());
+        verify(projectMapper).updateStatusToEvalClosed(projectId);
     }
 
     // ==================== 辅助方法 ====================

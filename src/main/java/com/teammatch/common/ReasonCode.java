@@ -27,17 +27,16 @@ public enum ReasonCode {
     ADMIN_REQUIRED("M3009", "需要管理员权限"),
     SKILL_TAG_NOT_FOUND("M3010", "技能标签不存在或已禁用"),
 
-    // 项目级错误（M50xx）
-    NOT_PROJECT_MEMBER("M5001", "用户不是该项目成员"),
-    PROJECT_NOT_ENDED("M5002", "项目尚未结束"),
-    EVAL_WINDOW_CLOSED("M5003", "互评窗口已关闭"),
+    // 互评资格错误
+    NOT_PROJECT_MEMBER("NOT_PROJECT_MEMBER", "当前用户不是该项目成员"),
+    PROJECT_NOT_ENDED("PROJECT_NOT_ENDED", "项目尚未进入互评阶段"),
+    EVAL_WINDOW_CLOSED("EVAL_WINDOW_CLOSED", "互评窗口已关闭"),
     PROJECT_NOT_FOUND("M5004", "项目不存在"),
 
-    // 成员级错误（M51xx）
-    SELF_EVALUATION_NOT_ALLOWED("M5101", "不允许自评"),
-    DUPLICATE_EVALUATION("M5102", "重复评价"),
-    TARGET_NOT_MEMBER("M5103", "被评价人不是项目成员"),
-    EVALUATOR_NOT_MEMBER("M5104", "评价人不是项目成员"),
+    // 互评成员错误
+    SELF_EVALUATION("SELF_EVALUATION", "不能评价自己"),
+    ALREADY_EVALUATED("ALREADY_EVALUATED", "已评价过该成员"),
+    TARGET_NOT_PROJECT_MEMBER("TARGET_NOT_PROJECT_MEMBER", "目标用户不是项目成员"),
 
     // 内容校验级错误（M52xx）
     SCORE_FIELD_MISSING("M5201", "评分字段缺失"),
@@ -82,7 +81,7 @@ public enum ReasonCode {
      * 根据错误码字符串查找对应的枚举
      * 使用 Map 缓存，时间复杂度 O(1)
      *
-     * @param code 错误码字符串（如 "M5001"）
+     * @param code 错误码字符串（如 "NOT_PROJECT_MEMBER"）
      * @return 对应的 ReasonCode 枚举，找不到返回 UNKNOWN_ERROR
      */
     public static ReasonCode fromCode(String code) {

@@ -3,6 +3,8 @@ package com.teammatch.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.teammatch.entity.Project;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * 项目数据访问层
@@ -24,5 +26,10 @@ public interface ProjectMapper extends BaseMapper<Project> {
     // 2. 检查项目状态是否为 "ended"（在 Service 层判断）
     // 3. 检查当前时间是否在 evalDeadline 之前（在 Service 层判断）
 
-    // 当前不需要自定义 SQL 方法，BaseMapper 已足够
+    /**
+     * 互评窗口过期时执行项目状态懒关闭。
+     * 仅允许 ended -> eval_closed，避免覆盖其他并发状态变更。
+     */
+    @Update("UPDATE project SET status = 'eval_closed' WHERE id = #{id} AND status = 'ended'")
+    int updateStatusToEvalClosed(@Param("id") Long id);
 }

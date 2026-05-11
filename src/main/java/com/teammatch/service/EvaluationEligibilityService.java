@@ -10,7 +10,7 @@ import com.teammatch.mapper.EvaluationMapper;
 import com.teammatch.mapper.ProjectMapper;
 import com.teammatch.mapper.TeamMemberMapper;
 import com.teammatch.mapper.UserMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -25,19 +25,16 @@ import java.util.stream.Collectors;
  * 实现 M5-1A/B/C 的核心业务逻辑
  */
 @Service
+@RequiredArgsConstructor
 public class EvaluationEligibilityService {
 
-    @Autowired
-    private ProjectMapper projectMapper;
+    private final ProjectMapper projectMapper;
 
-    @Autowired
-    private TeamMemberMapper teamMemberMapper;
+    private final TeamMemberMapper teamMemberMapper;
 
-    @Autowired
-    private EvaluationMapper evaluationMapper;
+    private final EvaluationMapper evaluationMapper;
 
-    @Autowired
-    private UserMapper userMapper;
+    private final UserMapper userMapper;
 
     /**
      * M5-1A：项目级互评入口判断
@@ -72,6 +69,7 @@ public class EvaluationEligibilityService {
         }
         LocalDateTime now = LocalDateTime.now();
         if (now.isAfter(evalDeadline)) {
+            projectMapper.updateStatusToEvalClosed(projectId);
             return Result.fail(ReasonCode.EVAL_WINDOW_CLOSED);
         }
 
@@ -153,24 +151,24 @@ public class EvaluationEligibilityService {
     public Result<Void> validateSubmission(Long evaluatorId, Long targetId, Long projectId) {
         // 1. 检查是否自评
         if (evaluatorId.equals(targetId)) {
-            return Result.fail(ReasonCode.SELF_EVALUATION_NOT_ALLOWED);
+            return Result.fail(ReasonCode.SELF_EVALUATION);
         }
 
         // 2. 检查是否重复评价
         if (evaluationMapper.findEvaluation(evaluatorId, targetId, projectId) != null) {
-            return Result.fail(ReasonCode.DUPLICATE_EVALUATION);
+            return Result.fail(ReasonCode.ALREADY_EVALUATED);
         }
 
         // 3. 检查评价人是否是项目的 active 成员
         TeamMember evaluator = teamMemberMapper.findActiveMember(evaluatorId, projectId);
         if (evaluator == null) {
-            return Result.fail(ReasonCode.EVALUATOR_NOT_MEMBER);
+            return Result.fail(ReasonCode.NOT_PROJECT_MEMBER);
         }
 
         // 4. 检查被评价人是否是项目的 active 成员
         TeamMember target = teamMemberMapper.findActiveMember(targetId, projectId);
         if (target == null) {
-            return Result.fail(ReasonCode.TARGET_NOT_MEMBER);
+            return Result.fail(ReasonCode.TARGET_NOT_PROJECT_MEMBER);
         }
 
         // 5. 检查项目级资格（项目状态、互评窗口）
