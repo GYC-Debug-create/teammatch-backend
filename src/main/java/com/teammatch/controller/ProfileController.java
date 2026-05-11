@@ -6,8 +6,10 @@ import com.teammatch.dto.UpdateProfileRequest;
 import com.teammatch.dto.UpdateUserSkillsRequest;
 import com.teammatch.entity.SkillTag;
 import com.teammatch.entity.User;
+import com.teammatch.exception.DuplicateDataException;
+import com.teammatch.exception.NotFoundException;
+import com.teammatch.service.AuthService;
 import com.teammatch.service.ProfileService;
-import com.teammatch.service.impl.AuthServiceImpl;
 import io.jsonwebtoken.Jwts;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,9 @@ public class ProfileController {
 
     @Autowired
     private ProfileService profileService;
+
+    @Autowired
+    private AuthService authService;
 
     private static final String JWT_SECRET = "<REDACTED>";
 
@@ -82,6 +87,28 @@ public class ProfileController {
     }
 
     /**
+     * E1. 更新 GitHub 账号
+     * 路径: PUT /api/profile/github/update
+     * 说明: 仅当已绑定过 GitHub 账号时可修改，否则返回 M3012 错误
+     */
+    @PutMapping("/github/update")
+    public Result<Void> updateGithub(@RequestBody java.util.Map<String, String> params,
+                                     @RequestHeader("Authorization") String token) {
+        try {
+            Long userId = getUserIdFromToken(token);
+            String githubUsername = params.get("githubUsername");
+            profileService.updateGithub(userId, githubUsername);
+            return Result.success(null);
+        } catch (NotFoundException e) {
+            // GitHub 账号未绑定
+            return Result.fail(e.getReasonCode());
+        } catch (Exception e) {
+            // 未知异常
+            return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
+        }
+    }
+
+    /**
      * F. 添加技能标签（旧接口，保留兼容）
      * 路径: POST /api/profile/skills/add
      */
@@ -104,8 +131,16 @@ public class ProfileController {
     public Result<Void> updateUserSkills(@Valid @RequestBody UpdateUserSkillsRequest request,
                                          @RequestHeader("Authorization") String token) {
         Long userId = getUserIdFromToken(token);
-        profileService.updateUserSkills(userId, request.getSkillTagIds());
-        return Result.success(null);
+        try {
+            profileService.updateUserSkills(userId, request.getSkillTagIds());
+            return Result.success(null);
+        } catch (NotFoundException e) {
+            // 技能标签不存在
+            return Result.fail(e.getReasonCode());
+        } catch (Exception e) {
+            // 未知异常
+            return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
+        }
     }
 
     /**
@@ -125,12 +160,26 @@ public class ProfileController {
      * 路径: POST /api/profile/skills/tag/add
      */
     @PostMapping("/skills/tag/add")
-    public Result<Void> addSkillTag(@RequestBody AddSkillTagRequest request) {
+    public Result<Void> addSkillTag(@RequestBody AddSkillTagRequest request,
+                                    @RequestHeader("Authorization") String token) {
+        // 管理员权限校验
+        if (!authService.isAdmin(token)) {
+            return Result.fail(com.teammatch.common.ReasonCode.ADMIN_REQUIRED);
+        }
+        
         SkillTag skillTag = new SkillTag();
         skillTag.setName(request.getName());
         skillTag.setCategory(request.getCategory());
         skillTag.setStatus("active"); // 强制设为 active
-        profileService.addSkillTag(skillTag);
-        return Result.success(null);
+        try {
+            profileService.addSkillTag(skillTag);
+            return Result.success(null);
+        } catch (DuplicateDataException e) {
+            // 技能标签已存在
+            return Result.fail(e.getReasonCode());
+        } catch (Exception e) {
+            // 未知异常
+            return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
+        }
     }
 }

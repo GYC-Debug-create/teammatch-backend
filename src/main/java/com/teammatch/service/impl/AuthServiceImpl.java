@@ -3,11 +3,17 @@ package com.teammatch.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.dto.LoginRequest;
+import com.teammatch.dto.PasswordLoginRequest;
 import com.teammatch.dto.PasswordRequest;
 import com.teammatch.dto.SendEmailCodeRequest;
 import com.teammatch.dto.UsernameRequest;
 import com.teammatch.dto.VerifyEmailCodeRequest;
 import com.teammatch.entity.User;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
+import com.teammatch.exception.DuplicateDataException;
+import com.teammatch.exception.NotFoundException;
+import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.service.AuthService;
 import io.jsonwebtoken.Jwts;
@@ -58,6 +64,48 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public User passwordLogin(PasswordLoginRequest request) {
+        // 参数校验
+        if (request.getUsername() == null || request.getUsername().isEmpty()) {
+            throw new ValidationException(ReasonCode.USERNAME_REQUIRED);
+        }
+        if (request.getPassword() == null || request.getPassword().isEmpty()) {
+            throw new ValidationException(ReasonCode.PASSWORD_REQUIRED, "密码不能为空");
+        }
+
+        // 根据用户名查询用户
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getUsername, request.getUsername());
+        User user = userMapper.selectOne(wrapper);
+
+        if (user == null) {
+            throw new AuthenticationException(ReasonCode.INVALID_PASSWORD);
+        }
+
+        // 检查用户是否设置了密码（在验证密码之前检查，避免 M3014 被 M3013 拦截）
+        if (user.getPasswordHash() == null || user.getPasswordHash().isEmpty()) {
+            throw new AuthenticationException(ReasonCode.PASSWORD_NOT_SET);
+        }
+
+        // 验证密码
+        if (!PASSWORD_ENCODER.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new AuthenticationException(ReasonCode.INVALID_PASSWORD);
+        }
+
+        // 检查用户状态
+        if (!"active".equals(user.getStatus())) {
+            throw new AuthenticationException(ReasonCode.ACCOUNT_BANNED, "账号已被封禁");
+        }
+
+        // V2.1 规范：密码登录仅适用于管理员，普通用户使用微信登录
+        if (user.getRole() == null || !"admin".equals(user.getRole())) {
+            throw new AuthorizationException(ReasonCode.ADMIN_REQUIRED);
+        }
+
+        return user;
+    }
+
+    @Override
     public void sendEmailCode(SendEmailCodeRequest request, String token) {
         Long userId = getUserIdFromToken(token);
         String code = String.format("%06d", new Random().nextInt(1000000));
@@ -82,7 +130,7 @@ public class AuthServiceImpl implements AuthService {
             User existingUser = userMapper.selectOne(wrapper);
             
             if (existingUser != null && !existingUser.getId().equals(userId)) {
-                throw new RuntimeException(ReasonCode.EMAIL_OCCUPIED.getMessage());
+                throw new DuplicateDataException(ReasonCode.EMAIL_OCCUPIED);
             }
             
             User user = userMapper.selectById(userId);
@@ -92,7 +140,7 @@ public class AuthServiceImpl implements AuthService {
                 
                 // 【实习要点4】邮箱验证成功后，重新计算正式档案状态
                 // 避免用户先填写档案再验证邮箱时，formalProfileCompleted 没有更新
-                checkAndUpdateFormalProfile(user);
+                user.updateFormalProfileCompleted();
                 
                 userMapper.updateById(user);
             }
@@ -108,14 +156,14 @@ public class AuthServiceImpl implements AuthService {
         Long adminId = getUserIdFromToken(token);
         User admin = userMapper.selectById(adminId);
         if (admin == null || !"admin".equals(admin.getRole())) {
-            throw new RuntimeException(ReasonCode.ADMIN_REQUIRED.getMessage());
+            throw new AuthorizationException(ReasonCode.ADMIN_REQUIRED);
         }
         
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw new ValidationException(ReasonCode.USERNAME_REQUIRED, "用户名不能为空");
         }
         if (request.getPassword() == null || request.getPassword().length() < 6) {
-            throw new RuntimeException(ReasonCode.PASSWORD_TOO_SHORT.getMessage());
+            throw new ValidationException(ReasonCode.PASSWORD_TOO_SHORT);
         }
         
         // 检查用户是否已存在
@@ -123,17 +171,14 @@ public class AuthServiceImpl implements AuthService {
         wrapper.eq(User::getUsername, request.getUsername());
         User user = userMapper.selectOne(wrapper);
         
-        if (user != null && user.getPasswordHash() != null) {
-            throw new RuntimeException("该用户已设置密码，请使用修改密码接口");
+        // V2.1 规范：普通用户统一微信登录，管理员才使用密码登录
+        // 因此创建密码接口只为已存在的用户设置密码，不允许创建新用户
+        if (user == null) {
+            throw new NotFoundException(ReasonCode.USER_NOT_FOUND, "用户不存在，请先通过微信登录创建用户");
         }
         
-        // 如果用户不存在，创建新用户
-        if (user == null) {
-            user = new User();
-            user.setUsername(request.getUsername());
-            user.setRole("user");
-            user.setStatus("active");
-            userMapper.insert(user);
+        if (user.getPasswordHash() != null && !user.getPasswordHash().isEmpty()) {
+            throw new DuplicateDataException(ReasonCode.PASSWORD_ALREADY_SET, "该用户已设置密码，请使用修改密码接口");
         }
         
         // 设置密码
@@ -147,14 +192,14 @@ public class AuthServiceImpl implements AuthService {
         Long adminId = getUserIdFromToken(token);
         User admin = userMapper.selectById(adminId);
         if (admin == null || !"admin".equals(admin.getRole())) {
-            throw new RuntimeException(ReasonCode.ADMIN_REQUIRED.getMessage());
+            throw new AuthorizationException(ReasonCode.ADMIN_REQUIRED);
         }
         
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw new ValidationException(ReasonCode.USERNAME_REQUIRED, "用户名不能为空");
         }
         if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
-            throw new RuntimeException(ReasonCode.PASSWORD_TOO_SHORT.getMessage());
+            throw new ValidationException(ReasonCode.PASSWORD_TOO_SHORT);
         }
         
         // 查找用户
@@ -163,14 +208,52 @@ public class AuthServiceImpl implements AuthService {
         User user = userMapper.selectOne(wrapper);
         
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new NotFoundException(ReasonCode.USER_NOT_FOUND);
         }
         
         // 如果提供了旧密码，需要验证旧密码是否正确
         if (request.getOldPassword() != null && !request.getOldPassword().isEmpty()) {
             if (user.getPasswordHash() == null || !PASSWORD_ENCODER.matches(request.getOldPassword(), user.getPasswordHash())) {
-                throw new RuntimeException(ReasonCode.OLD_PASSWORD_INCORRECT.getMessage());
+                throw new AuthenticationException(ReasonCode.OLD_PASSWORD_INCORRECT);
             }
+        }
+        
+        // 更新密码
+        user.setPasswordHash(PASSWORD_ENCODER.encode(request.getNewPassword()));
+        userMapper.updateById(user);
+    }
+
+    @Override
+    public void changePassword(PasswordRequest request, String token) {
+        // 参数校验
+        if (request.getOldPassword() == null || request.getOldPassword().isEmpty()) {
+            throw new ValidationException(ReasonCode.OLD_PASSWORD_REQUIRED, "旧密码不能为空");
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
+            throw new ValidationException(ReasonCode.PASSWORD_TOO_SHORT);
+        }
+        
+        // 获取当前用户
+        Long userId = getUserIdFromToken(token);
+        User user = userMapper.selectById(userId);
+        
+        if (user == null) {
+            throw new NotFoundException(ReasonCode.USER_NOT_FOUND);
+        }
+        
+        // 检查用户是否设置了密码
+        if (user.getPasswordHash() == null || user.getPasswordHash().isEmpty()) {
+            throw new AuthenticationException(ReasonCode.PASSWORD_NOT_SET, "该用户未设置密码，请联系管理员");
+        }
+        
+        // 验证旧密码
+        if (!PASSWORD_ENCODER.matches(request.getOldPassword(), user.getPasswordHash())) {
+            throw new AuthenticationException(ReasonCode.OLD_PASSWORD_INCORRECT);
+        }
+        
+        // 检查新旧密码是否相同
+        if (request.getOldPassword().equals(request.getNewPassword())) {
+            throw new ValidationException(ReasonCode.SAME_OLD_NEW_PASSWORD, "新密码不能与旧密码相同");
         }
         
         // 更新密码
@@ -181,19 +264,19 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void bindUsername(UsernameRequest request, String token) {
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw new ValidationException(ReasonCode.USERNAME_REQUIRED, "用户名不能为空");
         }
         
         Long userId = getUserIdFromToken(token);
         User user = userMapper.selectById(userId);
         
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new NotFoundException(ReasonCode.USER_NOT_FOUND);
         }
         
         // 如果已经绑定过 username，不允许重复绑定
         if (user.getUsername() != null && !user.getUsername().isEmpty()) {
-            throw new RuntimeException(ReasonCode.USERNAME_ALREADY_BOUND.getMessage());
+            throw new DuplicateDataException(ReasonCode.USERNAME_ALREADY_BOUND);
         }
         
         // 检查用户名是否已被其他用户占用
@@ -202,7 +285,7 @@ public class AuthServiceImpl implements AuthService {
         User existingUser = userMapper.selectOne(wrapper);
         
         if (existingUser != null && !existingUser.getId().equals(userId)) {
-            throw new RuntimeException(ReasonCode.USERNAME_OCCUPIED.getMessage());
+            throw new DuplicateDataException(ReasonCode.USERNAME_OCCUPIED);
         }
         
         user.setUsername(request.getUsername());
@@ -212,14 +295,14 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void updateUsername(UsernameRequest request, String token) {
         if (request.getUsername() == null || request.getUsername().isEmpty()) {
-            throw new RuntimeException("用户名不能为空");
+            throw new ValidationException(ReasonCode.USERNAME_REQUIRED, "用户名不能为空");
         }
         
         Long userId = getUserIdFromToken(token);
         User user = userMapper.selectById(userId);
         
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new NotFoundException(ReasonCode.USER_NOT_FOUND);
         }
         
         // 检查用户名是否已被其他用户占用
@@ -228,11 +311,23 @@ public class AuthServiceImpl implements AuthService {
         User existingUser = userMapper.selectOne(wrapper);
         
         if (existingUser != null && !existingUser.getId().equals(userId)) {
-            throw new RuntimeException("该用户名已被占用");
+            throw new DuplicateDataException(ReasonCode.USERNAME_OCCUPIED, "该用户名已被占用");
         }
         
         user.setUsername(request.getUsername());
         userMapper.updateById(user);
+    }
+
+    @Override
+    public boolean isAdmin(String token) {
+        // 从 Token 中解析用户ID
+        Long userId = getUserIdFromToken(token);
+        
+        // 查询用户信息
+        User user = userMapper.selectById(userId);
+        
+        // 检查用户是否存在且角色为 admin
+        return user != null && "admin".equals(user.getRole());
     }
 
     /**
@@ -285,10 +380,4 @@ public class AuthServiceImpl implements AuthService {
      * - 昵称不为空
      * - 学校不为空
      */
-    private void checkAndUpdateFormalProfile(User user) {
-        boolean completed = Boolean.TRUE.equals(user.getEmailVerified()) &&
-                user.getNickname() != null && !user.getNickname().isEmpty() &&
-                user.getSchool() != null && !user.getSchool().isEmpty();
-        user.setFormalProfileCompleted(completed);
-    }
 }

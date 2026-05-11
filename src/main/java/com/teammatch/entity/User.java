@@ -117,4 +117,22 @@ public class User {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    /**
+     * 更新正式档案完成状态
+     * 【实习要点4】在以下场景调用：
+     * 1. 邮箱验证成功后
+     * 2. 更新个人档案后
+     * 
+     * 正式档案完成条件：
+     * - 邮箱已验证
+     * - 昵称不为空
+     * - 学校不为空
+     */
+    public void updateFormalProfileCompleted() {
+        boolean completed = Boolean.TRUE.equals(this.emailVerified) &&
+                this.nickname != null && !this.nickname.isEmpty() &&
+                this.school != null && !this.school.isEmpty();
+        this.formalProfileCompleted = completed;
+    }
 }

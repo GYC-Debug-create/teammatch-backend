@@ -60,12 +60,11 @@ Authorization: Bearer <JWT Token>  (需要认证的接口)
     "formalProfileCompleted": false,
     "creditScore": 100,
     "token": "<REDACTED>"
-  },
-  "success": true
+  }
 }
 ```
 
-**注意**: 
+**注意**:
 - 返回的是 `LoginResponse` DTO，不包含敏感字段（passwordHash、role、status等）
 - `formalProfileCompleted` 表示正式档案是否完成（邮箱验证 + 昵称 + 学校）
 
@@ -93,8 +92,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -123,8 +121,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": "邮箱验证成功",
-  "success": true
+  "data": "邮箱验证成功"
 }
 ```
 
@@ -153,8 +150,7 @@ Authorization: Bearer <管理员Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -190,8 +186,7 @@ Authorization: Bearer <管理员Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -224,8 +219,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -258,10 +252,82 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
+
+---
+
+#### 8. 密码登录
+**接口**: `POST /api/auth/login/password`
+
+**说明**: 使用用户名和密码进行登录。
+
+**请求 Body**:
+```json
+{
+  "username": "zhangsan",
+  "password": "<REDACTED>"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": {
+    "id": 1,
+    "nickname": "张三",
+    "avatarUrl": null,
+    "emailVerified": true,
+    "formalProfileCompleted": true,
+    "creditScore": 100,
+    "token": "<REDACTED>"
+  }
+}
+```
+
+**业务规则**:
+- 用户名不能为空，否则返回 `M3011` 错误
+- 若用户未设置密码，返回 `M3014` 错误
+- 密码错误返回 `M3013` 错误
+- 登录成功后返回 `LoginResponse` DTO
+
+---
+
+#### 9. 用户修改密码
+**接口**: `PUT /api/auth/password/change`
+
+**说明**: 用户自主修改自己的密码，需要验证旧密码。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求 Body**:
+```json
+{
+  "oldPassword": "<REDACTED>",
+  "newPassword": "<REDACTED>"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": null
+}
+```
+
+**业务规则**:
+- 必须提供 Token，验证用户身份
+- 旧密码不正确返回 `M3008` 错误
+- 新密码长度至少 6 位，否则返回 `M3007` 错误
+- 新密码与旧密码不能相同
 
 ---
 
@@ -294,8 +360,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -323,14 +388,45 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
 ---
 
-#### 3. 全量替换用户技能（推荐）
+#### 3. 更新 GitHub 账号
+**接口**: `PUT /api/profile/github/update`
+
+**说明**: 更新已绑定的 GitHub 用户名。仅当用户已经绑定过 GitHub 账号时可修改。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求 Body**:
+```json
+{
+  "githubUsername": "new-github-name"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": null
+}
+```
+
+**业务规则**:
+- 若用户未绑定过 GitHub，返回 `M3012` 错误
+- 必须先调用 `POST /api/profile/github/bind` 完成首次绑定
+
+---
+
+#### 4. 全量替换用户技能（推荐）
 **接口**: `PUT /api/profile/skills`
 
 **说明**: 全量替换用户的技能标签列表。先删除旧技能，再插入新技能。
@@ -352,8 +448,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -364,7 +459,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 4. 获取技能标签列表
+#### 5. 获取技能标签列表
 **接口**: `GET /api/profile/skills/tags`
 
 **说明**: 获取所有激活状态的技能标签列表，供前端展示可选技能。
@@ -389,8 +484,7 @@ Authorization: Bearer <Token>
       "category": "framework",
       "status": "active"
     }
-  ],
-  "success": true
+  ]
 }
 ```
 
@@ -400,7 +494,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 5. 添加技能标签（用户，旧接口）
+#### 6. 添加技能标签（用户，旧接口）
 **接口**: `POST /api/profile/skills/add`
 
 **说明**: 为当前用户增量添加一个技能标签（保留兼容，推荐使用全量替换接口）。
@@ -422,8 +516,7 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
@@ -434,10 +527,15 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 6. 添加技能标签（管理员）
+#### 7. 添加技能标签（管理员）
 **接口**: `POST /api/profile/skills/tag/add`
 
-**说明**: 向数据库插入新的技能标签，供后续用户关联使用。
+**说明**: 向数据库插入新的技能标签，供后续用户关联使用。**需要管理员权限**。
+
+**请求 Headers**:
+```
+Authorization: Bearer <管理员Token>
+```
 
 **请求 Body**:
 ```json
@@ -452,15 +550,16 @@ Authorization: Bearer <Token>
 {
   "code": "00000",
   "message": "成功",
-  "data": null,
-  "success": true
+  "data": null
 }
 ```
 
 **业务规则**:
+- **需要管理员权限**（role=admin），非管理员返回 `M3009` 错误
 - 名称不能为空
 - 状态自动设为 `active`
 - 插入到 `skill_tag` 表
+- 若同名技能标签已存在，返回 `M3015` 错误
 
 ---
 
@@ -621,6 +720,12 @@ Authorization: Bearer <Token>
 | M3008 | 旧密码不正确 | 修改密码时旧密码错误 |
 | M3009 | 需要管理员权限 | 非管理员调用管理接口 |
 | M3010 | 技能标签不存在或已禁用 | 使用无效的技能ID |
+| M3011 | 用户名不能为空 | 密码登录时未提供用户名 |
+| M3012 | GitHub 账号未绑定 | 尝试更新未绑定的 GitHub |
+| M3013 | 用户名或密码错误 | 密码登录时凭证错误 |
+| M3014 | 该用户未设置密码 | 未设置密码的用户尝试密码登录 |
+| M3015 | 技能标签已存在 | 添加同名技能标签时重复 |
+| M3015 | 技能标签已存在 | 添加同名技能标签时重复 |
 
 ---
 
