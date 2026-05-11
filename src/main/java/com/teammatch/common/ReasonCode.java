@@ -26,6 +26,18 @@ public enum ReasonCode {
     OLD_PASSWORD_INCORRECT("M3008", "旧密码不正确"),
     ADMIN_REQUIRED("M3009", "需要管理员权限"),
     SKILL_TAG_NOT_FOUND("M3010", "技能标签不存在或已禁用"),
+    USERNAME_REQUIRED("M3011", "用户名不能为空"),
+    GITHUB_NOT_BOUND("M3012", "GitHub 账号未绑定，请先使用绑定接口"),
+    INVALID_PASSWORD("M3013", "用户名或密码错误"),
+    PASSWORD_NOT_SET("M3014", "该用户未设置密码，请先联系管理员创建密码"),
+    SKILL_TAG_ALREADY_EXISTS("M3015", "技能标签已存在"),
+    PASSWORD_REQUIRED("M3016", "密码不能为空"),
+    ACCOUNT_BANNED("M3017", "账号已被封禁"),
+    USER_NOT_FOUND("M3018", "用户不存在"),
+    PASSWORD_ALREADY_SET("M3019", "该用户已设置密码"),
+    OLD_PASSWORD_REQUIRED("M3020", "旧密码不能为空"),
+    SAME_OLD_NEW_PASSWORD("M3021", "新密码不能与旧密码相同"),
+    SKILL_TAG_NAME_REQUIRED("M3022", "技能标签名称不能为空"),
 
     // 互评资格错误
     NOT_PROJECT_MEMBER("NOT_PROJECT_MEMBER", "当前用户不是该项目成员"),

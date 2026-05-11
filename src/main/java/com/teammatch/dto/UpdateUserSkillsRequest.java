@@ -1,6 +1,6 @@
 package com.teammatch.dto;
 
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.List;
@@ -25,8 +25,8 @@ public class UpdateUserSkillsRequest {
 
     /**
      * 技能标签ID列表（全量替换）
-     * 如果传空列表，表示清空所有技能
+     * 传空数组 [] 表示清空所有技能；null 由 @NotNull 拦截为参数错误
      */
-    @NotEmpty(message = "技能标签ID列表不能为空（如需清空请传空数组）")
+    @NotNull(message = "skillTagIds 不能为 null")
     private List<Long> skillTagIds;
 }

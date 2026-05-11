@@ -5,6 +5,9 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.entity.SkillTag;
 import com.teammatch.entity.User;
 import com.teammatch.entity.UserSkill;
+import com.teammatch.exception.DuplicateDataException;
+import com.teammatch.exception.NotFoundException;
+import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.SkillTagMapper;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.mapper.UserSkillMapper;
@@ -45,7 +48,8 @@ public class ProfileServiceImpl implements ProfileService {
         if (profile.getBio() != null) user.setBio(profile.getBio());
 
         // 【实习要点4】更新档案后，重新计算正式档案状态
-        checkFormalProfile(user);
+        // 【实习要点4】更新正式档案完成状态
+        user.updateFormalProfileCompleted();
         userMapper.updateById(user);
     }
 
@@ -57,6 +61,21 @@ public class ProfileServiceImpl implements ProfileService {
 
         user.setGithubUsername(githubUsername);
         user.setGithubClaimed(true);
+        userMapper.updateById(user);
+    }
+
+    @Override
+    @Transactional
+    public void updateGithub(Long userId, String githubUsername) {
+        User user = userMapper.selectById(userId);
+        if (user == null) return;
+
+        // 检查是否已经绑定过 GitHub
+        if (user.getGithubClaimed() == null || !user.getGithubClaimed()) {
+            throw new RuntimeException(ReasonCode.GITHUB_NOT_BOUND.getMessage());
+        }
+
+        user.setGithubUsername(githubUsername);
         userMapper.updateById(user);
     }
 
@@ -86,19 +105,25 @@ public class ProfileServiceImpl implements ProfileService {
         return userSkills.stream().map(UserSkill::getSkillTagId).collect(Collectors.toList());
     }
 
-    private void checkFormalProfile(User user) {
-        boolean completed = Boolean.TRUE.equals(user.getEmailVerified()) &&
-                user.getNickname() != null && !user.getNickname().isEmpty() &&
-                user.getSchool() != null && !user.getSchool().isEmpty();
-        user.setFormalProfileCompleted(completed);
-    }
 
     @Override
     @Transactional
     public void addSkillTag(SkillTag skillTag) {
         if (skillTag.getName() == null || skillTag.getName().isEmpty()) {
-            throw new RuntimeException("技能标签名称不能为空");
+            throw new ValidationException(ReasonCode.SKILL_TAG_NAME_REQUIRED, "技能标签名称不能为空");
         }
+        
+        // 检查是否已存在同名同分类技能标签（DB 约束是 (category, name) 组合唯一）
+        LambdaQueryWrapper<SkillTag> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SkillTag::getName, skillTag.getName());
+        if (skillTag.getCategory() != null) {
+            wrapper.eq(SkillTag::getCategory, skillTag.getCategory());
+        }
+        SkillTag existing = skillTagMapper.selectOne(wrapper);
+        if (existing != null) {
+            throw new DuplicateDataException(ReasonCode.SKILL_TAG_ALREADY_EXISTS);
+        }
+        
         skillTag.setStatus("active");
         skillTagMapper.insert(skillTag);
     }
@@ -122,7 +147,7 @@ public class ProfileServiceImpl implements ProfileService {
         for (Long skillTagId : skillTagIds) {
             SkillTag tag = skillTagMapper.selectById(skillTagId);
             if (tag == null || !"active".equals(tag.getStatus())) {
-                throw new RuntimeException(ReasonCode.SKILL_TAG_NOT_FOUND.getMessage());
+                throw new NotFoundException(ReasonCode.SKILL_TAG_NOT_FOUND);
             }
         }
         

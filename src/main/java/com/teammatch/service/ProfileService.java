@@ -20,6 +20,11 @@ public interface ProfileService {
     void bindGithub(Long userId, String githubUsername);
 
     /**
+     * 更新 GitHub 用户名（仅当已经绑定过时可修改）
+     */
+    void updateGithub(Long userId, String githubUsername);
+
+    /**
      * 为用户添加技能标签
      */
     void addSkill(Long userId, Long skillTagId);
