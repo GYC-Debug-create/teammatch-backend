@@ -8,6 +8,7 @@ import com.teammatch.m6.mapper.BoardMapper;
 import com.teammatch.m6.service.BoardService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,15 +24,21 @@ public class BoardServiceImpl extends ServiceImpl<BoardMapper, Board> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Board createBoard(BoardCreateDTO dto) {
-        // 检查名称是否已存在
-        Board existingBoard = baseMapper.selectByName(dto.getName());
+        // 名称trim处理，确保业务唯一性
+        String trimmedName = dto.getName().trim();
+        if (!StringUtils.hasText(trimmedName)) {
+            throw new IllegalArgumentException("板块名称不能为空");
+        }
+
+        // 检查名称是否已存在（使用trim后的名称）
+        Board existingBoard = baseMapper.selectByName(trimmedName);
         if (existingBoard != null) {
-            throw new IllegalArgumentException("板块名称已存在: " + dto.getName());
+            throw new IllegalArgumentException("板块名称已存在: " + trimmedName);
         }
 
         // 创建板块实体
         Board board = new Board();
-        board.setName(dto.getName());
+        board.setName(trimmedName);
         board.setDescription(dto.getDescription());
         board.setStatus("active");
         board.setSortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : 0);
@@ -53,12 +60,16 @@ public class BoardServiceImpl extends ServiceImpl<BoardMapper, Board> implements
         }
 
         // 如果更新名称，检查是否与其他板块冲突
-        if (dto.getName() != null && !dto.getName().isBlank()) {
-            Board existingBoard = baseMapper.selectByName(dto.getName());
-            if (existingBoard != null && !existingBoard.getId().equals(id)) {
-                throw new IllegalArgumentException("板块名称已存在: " + dto.getName());
+        if (dto.getName() != null) {
+            String trimmedName = dto.getName().trim();
+            if (!StringUtils.hasText(trimmedName)) {
+                throw new IllegalArgumentException("板块名称不能为空");
             }
-            board.setName(dto.getName());
+            Board existingBoard = baseMapper.selectByName(trimmedName);
+            if (existingBoard != null && !existingBoard.getId().equals(id)) {
+                throw new IllegalArgumentException("板块名称已存在: " + trimmedName);
+            }
+            board.setName(trimmedName);
         }
 
         // 更新其他字段
@@ -108,5 +119,14 @@ public class BoardServiceImpl extends ServiceImpl<BoardMapper, Board> implements
     @Override
     public Board getBoardById(Long id) {
         return baseMapper.selectById(id);
+    }
+
+    @Override
+    public boolean existsActiveBoard(Long boardId) {
+        if (boardId == null) {
+            return false;
+        }
+        Board board = baseMapper.selectById(boardId);
+        return board != null && "active".equals(board.getStatus());
     }
 }

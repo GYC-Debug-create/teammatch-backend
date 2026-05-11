@@ -97,6 +97,34 @@ class BoardServiceTest {
     }
 
     @Test
+    @DisplayName("createBoard: 名称前后空格自动trim")
+    void createBoard_trimName() {
+        when(boardMapper.selectByName("新板块")).thenReturn(null);
+        when(boardMapper.insert(any(Board.class))).thenReturn(1);
+
+        BoardCreateDTO dto = new BoardCreateDTO();
+        dto.setName("  新板块  ");
+        dto.setDescription("描述");
+
+        Board result = service.createBoard(dto);
+
+        assertThat(result.getName()).isEqualTo("新板块");
+    }
+
+    @Test
+    @DisplayName("createBoard: 名称trim后为空时抛出异常")
+    void createBoard_emptyAfterTrim_throws() {
+        BoardCreateDTO dto = new BoardCreateDTO();
+        dto.setName("   ");
+        dto.setDescription("描述");
+
+        assertThatThrownBy(() -> service.createBoard(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("板块名称不能为空");
+        verify(boardMapper, never()).insert(any());
+    }
+
+    @Test
     @DisplayName("createBoard: sortOrder 为 null 时默认为 0")
     void createBoard_defaultSortOrder() {
         when(boardMapper.selectByName("无排序板块")).thenReturn(null);
@@ -179,6 +207,34 @@ class BoardServiceTest {
 
         assertThat(result.getName()).isEqualTo("已有板块");
         verify(boardMapper).updateById(any(Board.class));
+    }
+
+    @Test
+    @DisplayName("updateBoard: 名称前后空格自动trim")
+    void updateBoard_trimName() {
+        when(boardMapper.selectById(BOARD_ID)).thenReturn(existingBoard);
+        when(boardMapper.selectByName("新名称")).thenReturn(null);
+        when(boardMapper.updateById(any(Board.class))).thenReturn(1);
+
+        BoardUpdateDTO dto = new BoardUpdateDTO();
+        dto.setName("  新名称  ");
+
+        Board result = service.updateBoard(BOARD_ID, dto);
+
+        assertThat(result.getName()).isEqualTo("新名称");
+    }
+
+    @Test
+    @DisplayName("updateBoard: 名称trim后为空时抛出异常")
+    void updateBoard_emptyAfterTrim_throws() {
+        when(boardMapper.selectById(BOARD_ID)).thenReturn(existingBoard);
+
+        BoardUpdateDTO dto = new BoardUpdateDTO();
+        dto.setName("   ");
+
+        assertThatThrownBy(() -> service.updateBoard(BOARD_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("板块名称不能为空");
     }
 
     @Test
@@ -314,5 +370,48 @@ class BoardServiceTest {
         Board result = service.getBoardById(99999L);
 
         assertThat(result).isNull();
+    }
+
+    // ==================== existsActiveBoard ====================
+
+    @Test
+    @DisplayName("existsActiveBoard: 存在且启用的板块返回 true")
+    void existsActiveBoard_active_returnsTrue() {
+        when(boardMapper.selectById(BOARD_ID)).thenReturn(existingBoard);
+
+        boolean result = service.existsActiveBoard(BOARD_ID);
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("existsActiveBoard: 禁用的板块返回 false")
+    void existsActiveBoard_inactive_returnsFalse() {
+        Board inactiveBoard = new Board();
+        inactiveBoard.setId(BOARD_ID);
+        inactiveBoard.setStatus("inactive");
+        when(boardMapper.selectById(BOARD_ID)).thenReturn(inactiveBoard);
+
+        boolean result = service.existsActiveBoard(BOARD_ID);
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("existsActiveBoard: 不存在的板块返回 false")
+    void existsActiveBoard_notExists_returnsFalse() {
+        when(boardMapper.selectById(99999L)).thenReturn(null);
+
+        boolean result = service.existsActiveBoard(99999L);
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("existsActiveBoard: null ID 返回 false")
+    void existsActiveBoard_nullId_returnsFalse() {
+        boolean result = service.existsActiveBoard(null);
+
+        assertThat(result).isFalse();
     }
 }

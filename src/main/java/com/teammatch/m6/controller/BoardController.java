@@ -38,6 +38,7 @@ public class BoardController {
             Board board = boardService.createBoard(dto);
             return Result.success(board);
         } catch (IllegalArgumentException e) {
+            // 名称重复、名称为空等参数错误
             return Result.fail(com.teammatch.common.ReasonCode.PARAM_ERROR);
         }
     }
@@ -56,6 +57,12 @@ public class BoardController {
             Board board = boardService.updateBoard(id, dto);
             return Result.success(board);
         } catch (IllegalArgumentException e) {
+            // 区分"板块不存在"和"参数错误"
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("板块不存在")) {
+                return Result.fail(com.teammatch.common.ReasonCode.NOT_FOUND);
+            }
+            // 名称重复、名称为空、无效状态等参数错误
             return Result.fail(com.teammatch.common.ReasonCode.PARAM_ERROR);
         }
     }
@@ -74,8 +81,10 @@ public class BoardController {
             boardService.deleteBoard(id);
             return Result.success();
         } catch (IllegalArgumentException e) {
-            return Result.fail(com.teammatch.common.ReasonCode.PARAM_ERROR);
+            // 板块不存在
+            return Result.fail(com.teammatch.common.ReasonCode.NOT_FOUND);
         } catch (IllegalStateException e) {
+            // 有项目引用，无法删除
             return Result.fail(com.teammatch.common.ReasonCode.STATUS_CONFLICT);
         }
     }

@@ -58,4 +58,13 @@ public interface BoardService extends IService<Board> {
      * @return 板块实体，不存在返回 null
      */
     Board getBoardById(Long id);
+
+    /**
+     * 检查板块是否存在且启用
+     * 供M4项目创建时调用
+     *
+     * @param boardId 板块ID
+     * @return true-存在且启用，false-不存在或禁用
+     */
+    boolean existsActiveBoard(Long boardId);
 }
