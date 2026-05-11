@@ -66,17 +66,21 @@ public class CreditRuleServiceImpl implements CreditRuleService {
 
     @Override
     public int calculateCappedDelta(Long userId, Long projectId, int proposedDelta) {
+        int existing = getExistingProjectDelta(userId, projectId);
+        return calculateCappedDeltaFromExisting(existing, proposedDelta);
+    }
+
+    @Override
+    public int calculateCappedDeltaFromExisting(int existingProjectDelta, int proposedDelta) {
         if (proposedDelta == 0) return 0;
 
-        int currentTotalDelta = getExistingProjectDelta(userId, projectId);
-
         int maxAllowed = 10;
-        int targetTotal = currentTotalDelta + proposedDelta;
+        int targetTotal = existingProjectDelta + proposedDelta;
 
         if (targetTotal > maxAllowed) {
-            return Math.max(0, maxAllowed - currentTotalDelta);
+            return Math.max(0, maxAllowed - existingProjectDelta);
         } else if (targetTotal < -maxAllowed) {
-            return Math.min(0, -maxAllowed - currentTotalDelta);
+            return Math.min(0, -maxAllowed - existingProjectDelta);
         }
 
         return proposedDelta;
