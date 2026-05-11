@@ -2,6 +2,7 @@ package com.teammatch.config;
 
 import org.springframework.context.annotation.Configuration;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -68,6 +69,14 @@ public class ValidationConfig {
         "吃屎", "喂狗"
     );
 
+    private static final Set<String> POSITIVE_TAGS = Set.of(
+        "沟通积极", "按时交付", "技术可靠", "责任心强"
+    );
+
+    private static final Set<String> NEGATIVE_TAGS = Set.of(
+        "沟通差", "延期", "质量低", "失联"
+    );
+
     /**
      * 检查文本是否包含违规词
      * 使用简单字符串包含检查，大小写不敏感
@@ -83,5 +92,39 @@ public class ValidationConfig {
         String lowerText = text.toLowerCase();
         return VIOLATION_WORDS.stream()
                 .anyMatch(lowerText::contains);
+    }
+
+    public boolean containsAnyValidPositiveTag(List<String> tags) {
+        return containsAnyValidTag(tags, POSITIVE_TAGS);
+    }
+
+    public boolean allPositiveTagsValid(List<String> tags) {
+        return allTagsValid(tags, POSITIVE_TAGS);
+    }
+
+    public boolean containsAnyValidNegativeTag(List<String> tags) {
+        return containsAnyValidTag(tags, NEGATIVE_TAGS);
+    }
+
+    public boolean allNegativeTagsValid(List<String> tags) {
+        return allTagsValid(tags, NEGATIVE_TAGS);
+    }
+
+    private boolean containsAnyValidTag(List<String> tags, Set<String> whitelist) {
+        if (tags == null || tags.isEmpty()) {
+            return false;
+        }
+
+        return tags.stream()
+                .anyMatch(whitelist::contains);
+    }
+
+    private boolean allTagsValid(List<String> tags, Set<String> whitelist) {
+        if (tags == null || tags.isEmpty()) {
+            return false;
+        }
+
+        return tags.stream()
+                .allMatch(whitelist::contains);
     }
 }

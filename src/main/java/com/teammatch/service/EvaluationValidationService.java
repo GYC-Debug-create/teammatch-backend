@@ -4,7 +4,7 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.config.ValidationConfig;
 import com.teammatch.dto.EvaluationSubmitDTO;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,10 +14,10 @@ import java.util.List;
  * 实现 M5-2 互评提交内容基础合法性校验
  */
 @Service
+@RequiredArgsConstructor
 public class EvaluationValidationService {
 
-    @Autowired
-    private ValidationConfig validationConfig;
+    private final ValidationConfig validationConfig;
 
     /**
      * 校验互评提交内容的合法性
@@ -45,19 +45,19 @@ public class EvaluationValidationService {
             return commentViolationCheck;
         }
 
-        // 规则 4: 检查高分（5分）是否有 positive tag
+        // 规则 4: 检查高分（5分）是否有合法 positive tag
         Result<Void> highScoreTagCheck = checkHighScorePositiveTag(dto);
         if (highScoreTagCheck.isFail()) {
             return highScoreTagCheck;
         }
 
-        // 规则 5: 检查低分（1-2分）是否有 negative tag
+        // 规则 5: 检查低分（1-2分）是否有合法 negative tag
         Result<Void> lowScoreTagCheck = checkLowScoreNegativeTag(dto);
         if (lowScoreTagCheck.isFail()) {
             return lowScoreTagCheck;
         }
 
-        // 规则 6: 检查低分（1-2分）comment 是否非空
+        // 规则 6: 检查低分（1-2分）comment 是否不少于 20 字
         Result<Void> lowScoreCommentCheck = checkLowScoreComment(dto);
         if (lowScoreCommentCheck.isFail()) {
             return lowScoreCommentCheck;
@@ -114,14 +114,20 @@ public class EvaluationValidationService {
     }
 
     /**
-     * 规则 4: 检查高分（5分）是否有 positive tag
-     * 只要出现 5 分，就必须有至少一个 positive tag
+     * 规则 4: 检查高分（5分）是否有合法 positive tag
+     * 只要出现 5 分，就必须有至少一个 P0 正向标签，且不能混入未知标签
      */
     private Result<Void> checkHighScorePositiveTag(EvaluationSubmitDTO dto) {
         boolean hasHighScore = hasScore(dto, 5);
+        List<String> positiveTags = dto.getPositiveTags();
+        if (positiveTags != null && !positiveTags.isEmpty()
+                && !validationConfig.allPositiveTagsValid(positiveTags)) {
+            return Result.fail(ReasonCode.HIGH_SCORE_MISSING_POSITIVE_TAG);
+        }
+
         if (hasHighScore) {
-            List<String> positiveTags = dto.getPositiveTags();
-            if (positiveTags == null || positiveTags.isEmpty()) {
+            if (positiveTags == null || positiveTags.isEmpty()
+                    || !validationConfig.containsAnyValidPositiveTag(positiveTags)) {
                 return Result.fail(ReasonCode.HIGH_SCORE_MISSING_POSITIVE_TAG);
             }
         }
@@ -129,14 +135,20 @@ public class EvaluationValidationService {
     }
 
     /**
-     * 规则 5: 检查低分（1-2分）是否有 negative tag
-     * 只要出现 1 分或 2 分，就必须有至少一个 negative tag
+     * 规则 5: 检查低分（1-2分）是否有合法 negative tag
+     * 只要出现 1 分或 2 分，就必须有至少一个 P0 负向标签，且不能混入未知标签
      */
     private Result<Void> checkLowScoreNegativeTag(EvaluationSubmitDTO dto) {
         boolean hasLowScore = hasScore(dto, 1) || hasScore(dto, 2);
+        List<String> negativeTags = dto.getNegativeTags();
+        if (negativeTags != null && !negativeTags.isEmpty()
+                && !validationConfig.allNegativeTagsValid(negativeTags)) {
+            return Result.fail(ReasonCode.LOW_SCORE_MISSING_NEGATIVE_TAG);
+        }
+
         if (hasLowScore) {
-            List<String> negativeTags = dto.getNegativeTags();
-            if (negativeTags == null || negativeTags.isEmpty()) {
+            if (negativeTags == null || negativeTags.isEmpty()
+                    || !validationConfig.containsAnyValidNegativeTag(negativeTags)) {
                 return Result.fail(ReasonCode.LOW_SCORE_MISSING_NEGATIVE_TAG);
             }
         }
@@ -144,15 +156,15 @@ public class EvaluationValidationService {
     }
 
     /**
-     * 规则 6: 检查低分（1-2分）comment 是否非空
-     * 只要出现 1 分或 2 分，comment.trim() 必须非空
+     * 规则 6: 检查低分（1-2分）comment 是否不少于 20 字
+     * 只要出现 1 分或 2 分，comment.trim() 必须不少于 20 字
      */
     private Result<Void> checkLowScoreComment(EvaluationSubmitDTO dto) {
         boolean hasLowScore = hasScore(dto, 1) || hasScore(dto, 2);
         if (hasLowScore) {
             String comment = dto.getComment();
-            if (comment == null || comment.trim().isEmpty()) {
-                return Result.fail(ReasonCode.LOW_SCORE_COMMENT_EMPTY);
+            if (comment == null || comment.trim().length() < 20) {
+                return Result.fail(ReasonCode.LOW_SCORE_COMMENT_TOO_SHORT);
             }
         }
         return Result.success();

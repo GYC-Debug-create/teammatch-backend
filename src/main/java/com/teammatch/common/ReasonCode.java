@@ -44,7 +44,7 @@ public enum ReasonCode {
     COMMENT_CONTAINS_VIOLATION("M5203", "评论包含违规词"),
     HIGH_SCORE_MISSING_POSITIVE_TAG("M5204", "高分缺少正向标签"),
     LOW_SCORE_MISSING_NEGATIVE_TAG("M5205", "低分缺少负向标签"),
-    LOW_SCORE_COMMENT_EMPTY("M5206", "低分评论为空"),
+    LOW_SCORE_COMMENT_TOO_SHORT("M5206", "低分评论过短"),
 
     // 通用错误
     UNKNOWN_ERROR("M9999", "未知错误");

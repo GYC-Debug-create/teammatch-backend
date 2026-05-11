@@ -9,7 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
@@ -29,8 +29,8 @@ class EvaluationValidationServiceTest {
 
     // ==================== Mock 对象 ====================
 
-    @Mock
-    private ValidationConfig validationConfig;
+    @Spy
+    private ValidationConfig validationConfig = new ValidationConfig();
 
     @InjectMocks
     private EvaluationValidationService service;
@@ -51,7 +51,7 @@ class EvaluationValidationServiceTest {
         validDto.setSkillScore(4);
         validDto.setResponsibilityScore(4);
         validDto.setComment("合作愉快，技术能力强");
-        validDto.setPositiveTags(Arrays.asList("沟通积极", "技术强"));
+        validDto.setPositiveTags(Arrays.asList("沟通积极", "技术可靠"));
         validDto.setNegativeTags(Collections.emptyList());
     }
 
@@ -165,8 +165,8 @@ class EvaluationValidationServiceTest {
         validDto.setTaskScore(1);
         validDto.setSkillScore(1);
         validDto.setResponsibilityScore(1);
-        validDto.setNegativeTags(Arrays.asList("沟通不畅"));
-        validDto.setComment("需要改进");
+        validDto.setNegativeTags(Arrays.asList("沟通差"));
+        validDto.setComment("沟通协作严重不足，需要持续改进任务反馈节奏");
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
@@ -183,7 +183,7 @@ class EvaluationValidationServiceTest {
         validDto.setTaskScore(5);
         validDto.setSkillScore(5);
         validDto.setResponsibilityScore(5);
-        validDto.setPositiveTags(Arrays.asList("非常优秀"));
+        validDto.setPositiveTags(Arrays.asList("责任心强"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
@@ -258,20 +258,8 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_RealConfig_OperationNotViolation() {
         // Given
         validDto.setComment("操作熟练，技术能力强");
-        // 创建真实的 ValidationConfig 和 Service（不使用 Mock）
-        ValidationConfig realConfig = new ValidationConfig();
-        EvaluationValidationService realService = new EvaluationValidationService();
-        // 使用反射注入 validationConfig
-        try {
-            java.lang.reflect.Field field = EvaluationValidationService.class.getDeclaredField("validationConfig");
-            field.setAccessible(true);
-            field.set(realService, realConfig);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
         // When
-        Result<Void> result = realService.validateSubmission(validDto);
+        Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isSuccess()).isTrue();
@@ -282,20 +270,8 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_RealConfig_PlaygroundNotViolation() {
         // Given
         validDto.setComment("在操场沟通项目需求，配合默契");
-        // 创建真实的 ValidationConfig 和 Service（不使用 Mock）
-        ValidationConfig realConfig = new ValidationConfig();
-        EvaluationValidationService realService = new EvaluationValidationService();
-        // 使用反射注入 validationConfig
-        try {
-            java.lang.reflect.Field field = EvaluationValidationService.class.getDeclaredField("validationConfig");
-            field.setAccessible(true);
-            field.set(realService, realConfig);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
         // When
-        Result<Void> result = realService.validateSubmission(validDto);
+        Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isSuccess()).isTrue();
@@ -306,20 +282,8 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_RealConfig_ExplicitViolation() {
         // Given
         validDto.setComment("这个人真是傻逼");
-        // 创建真实的 ValidationConfig 和 Service（不使用 Mock）
-        ValidationConfig realConfig = new ValidationConfig();
-        EvaluationValidationService realService = new EvaluationValidationService();
-        // 使用反射注入 validationConfig
-        try {
-            java.lang.reflect.Field field = EvaluationValidationService.class.getDeclaredField("validationConfig");
-            field.setAccessible(true);
-            field.set(realService, realConfig);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
         // When
-        Result<Void> result = realService.validateSubmission(validDto);
+        Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isFail()).isTrue();
@@ -363,13 +327,43 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_HighScoreWithPositiveTag() {
         // Given
         validDto.setSkillScore(5);
-        validDto.setPositiveTags(Arrays.asList("技术强"));
+        validDto.setPositiveTags(Arrays.asList("技术可靠"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("规则4 - 高分正向标签不在白名单 - 失败")
+    void testValidateSubmission_HighScoreUnknownPositiveTag() {
+        // Given
+        validDto.setCommunicationScore(5);
+        validDto.setPositiveTags(Arrays.asList("非常优秀"));
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.HIGH_SCORE_MISSING_POSITIVE_TAG.getCode());
+    }
+
+    @Test
+    @DisplayName("规则4 - 高分正向标签混入未知值 - 失败")
+    void testValidateSubmission_HighScoreMixedUnknownPositiveTag() {
+        // Given
+        validDto.setTaskScore(5);
+        validDto.setPositiveTags(Arrays.asList("沟通积极", "非常优秀"));
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.HIGH_SCORE_MISSING_POSITIVE_TAG.getCode());
     }
 
     @Test
@@ -428,14 +422,46 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_LowScoreWithNegativeTag() {
         // Given
         validDto.setSkillScore(1);
-        validDto.setNegativeTags(Arrays.asList("技术不足"));
-        validDto.setComment("需要提升技术能力");
+        validDto.setNegativeTags(Arrays.asList("质量低"));
+        validDto.setComment("技术实现质量偏低，需要补齐测试和交付标准");
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("规则5 - 低分负向标签不在白名单 - 失败")
+    void testValidateSubmission_LowScoreUnknownNegativeTag() {
+        // Given
+        validDto.setCommunicationScore(1);
+        validDto.setNegativeTags(Arrays.asList("任务拖延"));
+        validDto.setComment("任务推进存在延期，需要更早暴露风险并同步进度");
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_MISSING_NEGATIVE_TAG.getCode());
+    }
+
+    @Test
+    @DisplayName("规则5 - 低分负向标签混入未知值 - 失败")
+    void testValidateSubmission_LowScoreMixedUnknownNegativeTag() {
+        // Given
+        validDto.setTaskScore(2);
+        validDto.setNegativeTags(Arrays.asList("延期", "任务拖延"));
+        validDto.setComment("任务推进存在延期，需要更早暴露风险并同步进度");
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_MISSING_NEGATIVE_TAG.getCode());
     }
 
     @Test
@@ -463,14 +489,14 @@ class EvaluationValidationServiceTest {
         // Given
         validDto.setCommunicationScore(1);
         validDto.setComment(null);
-        validDto.setNegativeTags(Arrays.asList("沟通不畅"));
+        validDto.setNegativeTags(Arrays.asList("沟通差"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_EMPTY.getCode());
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_TOO_SHORT.getCode());
     }
 
     @Test
@@ -479,14 +505,14 @@ class EvaluationValidationServiceTest {
         // Given
         validDto.setTaskScore(2);
         validDto.setComment("");
-        validDto.setNegativeTags(Arrays.asList("任务拖延"));
+        validDto.setNegativeTags(Arrays.asList("延期"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_EMPTY.getCode());
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_TOO_SHORT.getCode());
     }
 
     @Test
@@ -495,14 +521,14 @@ class EvaluationValidationServiceTest {
         // Given
         validDto.setSkillScore(1);
         validDto.setComment("   ");
-        validDto.setNegativeTags(Arrays.asList("技术不足"));
+        validDto.setNegativeTags(Arrays.asList("质量低"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
 
         // Then
         assertThat(result.isFail()).isTrue();
-        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_EMPTY.getCode());
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_TOO_SHORT.getCode());
     }
 
     @Test
@@ -510,8 +536,54 @@ class EvaluationValidationServiceTest {
     void testValidateSubmission_LowScoreWithComment() {
         // Given
         validDto.setResponsibilityScore(2);
-        validDto.setComment("责任心需要提升");
-        validDto.setNegativeTags(Arrays.asList("责任心不足"));
+        validDto.setComment("责任心表现不稳定，需要主动同步进度并按时完成");
+        validDto.setNegativeTags(Arrays.asList("失联"));
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("规则6 - 低分评论 19 字 - 失败")
+    void testValidateSubmission_LowScoreCommentLengthNineteen() {
+        // Given
+        validDto.setCommunicationScore(1);
+        validDto.setComment("一".repeat(19));
+        validDto.setNegativeTags(Arrays.asList("沟通差"));
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.LOW_SCORE_COMMENT_TOO_SHORT.getCode());
+    }
+
+    @Test
+    @DisplayName("规则6 - 低分评论 20 字 - 通过")
+    void testValidateSubmission_LowScoreCommentLengthTwenty() {
+        // Given
+        validDto.setCommunicationScore(1);
+        validDto.setComment("一".repeat(20));
+        validDto.setNegativeTags(Arrays.asList("沟通差"));
+
+        // When
+        Result<Void> result = service.validateSubmission(validDto);
+
+        // Then
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("规则6 - 低分评论 21 字 - 通过")
+    void testValidateSubmission_LowScoreCommentLengthTwentyOne() {
+        // Given
+        validDto.setTaskScore(2);
+        validDto.setComment("一".repeat(21));
+        validDto.setNegativeTags(Arrays.asList("延期"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
@@ -529,7 +601,7 @@ class EvaluationValidationServiceTest {
         validDto.setCommunicationScore(1);
         validDto.setPositiveTags(Arrays.asList("沟通积极"));
         validDto.setNegativeTags(Collections.emptyList());
-        validDto.setComment("需要改进");
+        validDto.setComment("沟通响应明显不足，需要及时同步问题并主动确认");
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
@@ -562,7 +634,7 @@ class EvaluationValidationServiceTest {
         validDto.setSkillScore(5);
         validDto.setResponsibilityScore(5);
         validDto.setComment("非常优秀，合作愉快");
-        validDto.setPositiveTags(Arrays.asList("沟通积极", "技术强", "责任心强"));
+        validDto.setPositiveTags(Arrays.asList("沟通积极", "技术可靠", "责任心强"));
         validDto.setNegativeTags(Collections.emptyList());
 
         // When
@@ -582,7 +654,7 @@ class EvaluationValidationServiceTest {
         validDto.setResponsibilityScore(2);
         validDto.setComment("沟通不畅，任务拖延，技术能力不足，责任心需要提升");
         validDto.setPositiveTags(Collections.emptyList());
-        validDto.setNegativeTags(Arrays.asList("沟通不畅", "任务拖延", "技术不足", "责任心不足"));
+        validDto.setNegativeTags(Arrays.asList("沟通差", "延期", "质量低", "失联"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
@@ -599,9 +671,9 @@ class EvaluationValidationServiceTest {
         validDto.setTaskScore(1);
         validDto.setSkillScore(4);
         validDto.setResponsibilityScore(3);
-        validDto.setComment("沟通很好，但任务完成度不够");
+        validDto.setComment("沟通表现很好，但任务完成度不够，需要明确交付节奏");
         validDto.setPositiveTags(Arrays.asList("沟通积极"));
-        validDto.setNegativeTags(Arrays.asList("任务拖延"));
+        validDto.setNegativeTags(Arrays.asList("延期"));
 
         // When
         Result<Void> result = service.validateSubmission(validDto);
