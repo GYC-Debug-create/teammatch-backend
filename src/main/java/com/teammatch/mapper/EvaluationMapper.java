@@ -42,4 +42,16 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
     @Select("SELECT target_id FROM evaluation WHERE evaluator_id = #{evaluatorId} AND project_id = #{projectId}")
     List<Long> findEvaluatedTargetIds(@Param("evaluatorId") Long evaluatorId,
                                       @Param("projectId") Long projectId);
+
+    /**
+     * 查询评价人在某个项目中已提交的全部评价
+     * 用于 M5-4 覆盖全部队友后的异常评价检测
+     *
+     * @param evaluatorId 评价人 ID
+     * @param projectId 项目 ID
+     * @return 该评价人在项目下提交的评价列表
+     */
+    @Select("SELECT * FROM evaluation WHERE evaluator_id = #{evaluatorId} AND project_id = #{projectId} ORDER BY id")
+    List<Evaluation> findByEvaluatorAndProject(@Param("evaluatorId") Long evaluatorId,
+                                               @Param("projectId") Long projectId);
 }
