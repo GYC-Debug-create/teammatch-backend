@@ -27,4 +27,12 @@ public interface CreditRuleService {
      * M5-3 查询用户在指定项目的已有 evaluation 类 effective credit_change 累计值
      */
     int getExistingProjectDelta(Long userId, Long projectId);
+
+    /**
+     * M5-3 基于已有项目累计值做封顶截断，纯函数不查 DB
+     * @param existingProjectDelta 已生效的 evaluation 类 credit_change 累计值
+     * @param proposedDelta 本次待应用的 rawDelta
+     * @return 截断后的有效 delta
+     */
+    int calculateCappedDeltaFromExisting(int existingProjectDelta, int proposedDelta);
 }

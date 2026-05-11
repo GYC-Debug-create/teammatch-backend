@@ -14,8 +14,9 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class CreditRuleServiceImplTest {
@@ -33,57 +34,57 @@ class CreditRuleServiceImplTest {
 
     @Test
     void mapAverageScoreToDelta_boundary_1_00() {
-        assertEquals(-5, creditRuleService.mapAverageScoreToDelta(1.00));
+        assertThat(creditRuleService.mapAverageScoreToDelta(1.00)).isEqualTo(-5);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_1_50() {
-        assertEquals(-3, creditRuleService.mapAverageScoreToDelta(1.50));
+        assertThat(creditRuleService.mapAverageScoreToDelta(1.50)).isEqualTo(-3);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_2_00() {
-        assertEquals(-2, creditRuleService.mapAverageScoreToDelta(2.00));
+        assertThat(creditRuleService.mapAverageScoreToDelta(2.00)).isEqualTo(-2);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_2_50() {
-        assertEquals(-1, creditRuleService.mapAverageScoreToDelta(2.50));
+        assertThat(creditRuleService.mapAverageScoreToDelta(2.50)).isEqualTo(-1);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_3_00() {
-        assertEquals(0, creditRuleService.mapAverageScoreToDelta(3.00));
+        assertThat(creditRuleService.mapAverageScoreToDelta(3.00)).isEqualTo(0);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_3_50() {
-        assertEquals(2, creditRuleService.mapAverageScoreToDelta(3.50));
+        assertThat(creditRuleService.mapAverageScoreToDelta(3.50)).isEqualTo(2);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_4_00() {
-        assertEquals(3, creditRuleService.mapAverageScoreToDelta(4.00));
+        assertThat(creditRuleService.mapAverageScoreToDelta(4.00)).isEqualTo(3);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_4_50() {
-        assertEquals(5, creditRuleService.mapAverageScoreToDelta(4.50));
+        assertThat(creditRuleService.mapAverageScoreToDelta(4.50)).isEqualTo(5);
     }
 
     @Test
     void mapAverageScoreToDelta_boundary_5_00() {
-        assertEquals(5, creditRuleService.mapAverageScoreToDelta(5.00));
+        assertThat(creditRuleService.mapAverageScoreToDelta(5.00)).isEqualTo(5);
     }
 
     @Test
-    void mapAverageScoreToDelta_upper_bound_4_49() {
-        assertEquals(3, creditRuleService.mapAverageScoreToDelta(4.25));
+    void mapAverageScoreToDelta_avg_4_25() {
+        assertThat(creditRuleService.mapAverageScoreToDelta(4.25)).isEqualTo(3);
     }
 
     @Test
-    void mapAverageScoreToDelta_lower_bound_2_99() {
-        assertEquals(-1, creditRuleService.mapAverageScoreToDelta(2.75));
+    void mapAverageScoreToDelta_avg_2_75() {
+        assertThat(creditRuleService.mapAverageScoreToDelta(2.75)).isEqualTo(-1);
     }
 
     @Test
@@ -93,7 +94,7 @@ class CreditRuleServiceImplTest {
         eval.setTaskScore(5);
         eval.setSkillScore(5);
         eval.setResponsibilityScore(5);
-        assertEquals(5, creditRuleService.calculateDeltaFromEvaluation(eval));
+        assertThat(creditRuleService.calculateDeltaFromEvaluation(eval)).isEqualTo(5);
     }
 
     @Test
@@ -103,7 +104,7 @@ class CreditRuleServiceImplTest {
         eval.setTaskScore(5);
         eval.setSkillScore(4);
         eval.setResponsibilityScore(4);
-        assertEquals(5, creditRuleService.calculateDeltaFromEvaluation(eval));
+        assertThat(creditRuleService.calculateDeltaFromEvaluation(eval)).isEqualTo(5);
     }
 
     @Test
@@ -113,7 +114,7 @@ class CreditRuleServiceImplTest {
         eval.setTaskScore(4);
         eval.setSkillScore(4);
         eval.setResponsibilityScore(4);
-        assertEquals(3, creditRuleService.calculateDeltaFromEvaluation(eval));
+        assertThat(creditRuleService.calculateDeltaFromEvaluation(eval)).isEqualTo(3);
     }
 
     @Test
@@ -123,7 +124,7 @@ class CreditRuleServiceImplTest {
         eval.setTaskScore(3);
         eval.setSkillScore(3);
         eval.setResponsibilityScore(3);
-        assertEquals(0, creditRuleService.calculateDeltaFromEvaluation(eval));
+        assertThat(creditRuleService.calculateDeltaFromEvaluation(eval)).isEqualTo(0);
     }
 
     @Test
@@ -133,7 +134,7 @@ class CreditRuleServiceImplTest {
         eval.setTaskScore(2);
         eval.setSkillScore(1);
         eval.setResponsibilityScore(2);
-        assertEquals(-3, creditRuleService.calculateDeltaFromEvaluation(eval));
+        assertThat(creditRuleService.calculateDeltaFromEvaluation(eval)).isEqualTo(-3);
     }
 
     @Test
@@ -141,7 +142,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(5));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, 3);
-        assertEquals(3, result);
+        assertThat(result).isEqualTo(3);
     }
 
     @Test
@@ -149,7 +150,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(8));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, 5);
-        assertEquals(2, result);
+        assertThat(result).isEqualTo(2);
     }
 
     @Test
@@ -157,7 +158,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(10));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, 3);
-        assertEquals(0, result);
+        assertThat(result).isEqualTo(0);
     }
 
     @Test
@@ -165,7 +166,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(0));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, -5);
-        assertEquals(-5, result);
+        assertThat(result).isEqualTo(-5);
     }
 
     @Test
@@ -173,7 +174,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(-8));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, -5);
-        assertEquals(-2, result);
+        assertThat(result).isEqualTo(-2);
     }
 
     @Test
@@ -181,7 +182,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(-10));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, -3);
-        assertEquals(0, result);
+        assertThat(result).isEqualTo(0);
     }
 
     @Test
@@ -189,7 +190,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(7));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, -3);
-        assertEquals(-3, result);
+        assertThat(result).isEqualTo(-3);
     }
 
     @Test
@@ -197,7 +198,7 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(-3));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, 5);
-        assertEquals(5, result);
+        assertThat(result).isEqualTo(5);
     }
 
     @Test
@@ -205,7 +206,63 @@ class CreditRuleServiceImplTest {
         when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
                 .thenReturn(createCreditChanges(5));
         int result = creditRuleService.calculateCappedDelta(1L, 1L, 0);
-        assertEquals(0, result);
+        assertThat(result).isEqualTo(0);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_no_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(5, 3)).isEqualTo(3);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_positive_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(8, 5)).isEqualTo(2);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_already_at_positive_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(10, 3)).isEqualTo(0);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_no_negative_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(0, -5)).isEqualTo(-5);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_negative_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(-8, -5)).isEqualTo(-2);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_already_at_negative_cap() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(-10, -3)).isEqualTo(0);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_positive_negative_offset() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(7, -3)).isEqualTo(-3);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_negative_positive_offset() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(-3, 5)).isEqualTo(5);
+    }
+
+    @Test
+    void calculateCappedDeltaFromExisting_zero_delta() {
+        assertThat(creditRuleService.calculateCappedDeltaFromExisting(5, 0)).isEqualTo(0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void getExistingProjectDelta_verifyQueryConditions() {
+        when(creditChangeMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(new ArrayList<>());
+
+        creditRuleService.getExistingProjectDelta(100L, 200L);
+
+        verify(creditChangeMapper).selectList(any(LambdaQueryWrapper.class));
     }
 
     private List<CreditChange> createCreditChanges(int totalValue) {

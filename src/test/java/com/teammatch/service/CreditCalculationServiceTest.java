@@ -12,7 +12,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 class CreditCalculationServiceTest {
@@ -34,17 +34,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(5.0)).thenReturn(5);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(0);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 5)).thenReturn(5);
+        when(creditRuleService.calculateCappedDeltaFromExisting(0, 5)).thenReturn(5);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("5.00"), result.getAverageScore());
-        assertEquals(5, result.getRawDelta());
-        assertEquals(0, result.getExistingProjectDelta());
-        assertEquals(5, result.getCappedDelta());
-        assertEquals(5, result.getProjectTotalAfterApplied());
-        assertFalse(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("5.00"));
+        assertThat(result.getRawDelta()).isEqualTo(5);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(0);
+        assertThat(result.getCappedDelta()).isEqualTo(5);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(5);
+        assertThat(result.getCapped()).isFalse();
     }
 
     @Test
@@ -53,17 +53,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(5.0)).thenReturn(5);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(8);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 5)).thenReturn(2);
+        when(creditRuleService.calculateCappedDeltaFromExisting(8, 5)).thenReturn(2);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("5.00"), result.getAverageScore());
-        assertEquals(5, result.getRawDelta());
-        assertEquals(8, result.getExistingProjectDelta());
-        assertEquals(2, result.getCappedDelta());
-        assertEquals(10, result.getProjectTotalAfterApplied());
-        assertTrue(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("5.00"));
+        assertThat(result.getRawDelta()).isEqualTo(5);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(8);
+        assertThat(result.getCappedDelta()).isEqualTo(2);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(10);
+        assertThat(result.getCapped()).isTrue();
     }
 
     @Test
@@ -72,17 +72,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(1.0)).thenReturn(-5);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(-8);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, -5)).thenReturn(-2);
+        when(creditRuleService.calculateCappedDeltaFromExisting(-8, -5)).thenReturn(-2);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("1.00"), result.getAverageScore());
-        assertEquals(-5, result.getRawDelta());
-        assertEquals(-8, result.getExistingProjectDelta());
-        assertEquals(-2, result.getCappedDelta());
-        assertEquals(-10, result.getProjectTotalAfterApplied());
-        assertTrue(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("1.00"));
+        assertThat(result.getRawDelta()).isEqualTo(-5);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(-8);
+        assertThat(result.getCappedDelta()).isEqualTo(-2);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(-10);
+        assertThat(result.getCapped()).isTrue();
     }
 
     @Test
@@ -91,17 +91,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(4.0)).thenReturn(3);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(0);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 3)).thenReturn(3);
+        when(creditRuleService.calculateCappedDeltaFromExisting(0, 3)).thenReturn(3);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("4.00"), result.getAverageScore());
-        assertEquals(3, result.getRawDelta());
-        assertEquals(0, result.getExistingProjectDelta());
-        assertEquals(3, result.getCappedDelta());
-        assertEquals(3, result.getProjectTotalAfterApplied());
-        assertFalse(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("4.00"));
+        assertThat(result.getRawDelta()).isEqualTo(3);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(0);
+        assertThat(result.getCappedDelta()).isEqualTo(3);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(3);
+        assertThat(result.getCapped()).isFalse();
     }
 
     @Test
@@ -110,17 +110,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(5.0)).thenReturn(5);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(10);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 5)).thenReturn(0);
+        when(creditRuleService.calculateCappedDeltaFromExisting(10, 5)).thenReturn(0);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("5.00"), result.getAverageScore());
-        assertEquals(5, result.getRawDelta());
-        assertEquals(10, result.getExistingProjectDelta());
-        assertEquals(0, result.getCappedDelta());
-        assertEquals(10, result.getProjectTotalAfterApplied());
-        assertTrue(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("5.00"));
+        assertThat(result.getRawDelta()).isEqualTo(5);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(10);
+        assertThat(result.getCappedDelta()).isEqualTo(0);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(10);
+        assertThat(result.getCapped()).isTrue();
     }
 
     @Test
@@ -129,17 +129,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(4.25)).thenReturn(3);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(0);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 3)).thenReturn(3);
+        when(creditRuleService.calculateCappedDeltaFromExisting(0, 3)).thenReturn(3);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("4.25"), result.getAverageScore());
-        assertEquals(3, result.getRawDelta());
-        assertEquals(0, result.getExistingProjectDelta());
-        assertEquals(3, result.getCappedDelta());
-        assertEquals(3, result.getProjectTotalAfterApplied());
-        assertFalse(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("4.25"));
+        assertThat(result.getRawDelta()).isEqualTo(3);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(0);
+        assertThat(result.getCappedDelta()).isEqualTo(3);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(3);
+        assertThat(result.getCapped()).isFalse();
     }
 
     @Test
@@ -148,17 +148,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(3.0)).thenReturn(0);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(5);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, 0)).thenReturn(0);
+        when(creditRuleService.calculateCappedDeltaFromExisting(5, 0)).thenReturn(0);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("3.00"), result.getAverageScore());
-        assertEquals(0, result.getRawDelta());
-        assertEquals(5, result.getExistingProjectDelta());
-        assertEquals(0, result.getCappedDelta());
-        assertEquals(5, result.getProjectTotalAfterApplied());
-        assertFalse(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("3.00"));
+        assertThat(result.getRawDelta()).isEqualTo(0);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(5);
+        assertThat(result.getCappedDelta()).isEqualTo(0);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(5);
+        assertThat(result.getCapped()).isFalse();
     }
 
     @Test
@@ -167,17 +167,17 @@ class CreditCalculationServiceTest {
 
         when(creditRuleService.mapAverageScoreToDelta(1.5)).thenReturn(-3);
         when(creditRuleService.getExistingProjectDelta(1L, 1L)).thenReturn(7);
-        when(creditRuleService.calculateCappedDelta(1L, 1L, -3)).thenReturn(-3);
+        when(creditRuleService.calculateCappedDeltaFromExisting(7, -3)).thenReturn(-3);
 
         CreditCalculationResult result = creditCalculationService.calculate(eval);
 
-        assertNotNull(result);
-        assertEquals(new BigDecimal("1.50"), result.getAverageScore());
-        assertEquals(-3, result.getRawDelta());
-        assertEquals(7, result.getExistingProjectDelta());
-        assertEquals(-3, result.getCappedDelta());
-        assertEquals(4, result.getProjectTotalAfterApplied());
-        assertFalse(result.getCapped());
+        assertThat(result).isNotNull();
+        assertThat(result.getAverageScore()).isEqualTo(new BigDecimal("1.50"));
+        assertThat(result.getRawDelta()).isEqualTo(-3);
+        assertThat(result.getExistingProjectDelta()).isEqualTo(7);
+        assertThat(result.getCappedDelta()).isEqualTo(-3);
+        assertThat(result.getProjectTotalAfterApplied()).isEqualTo(4);
+        assertThat(result.getCapped()).isFalse();
     }
 
     private Evaluation createEvaluation(Long targetId, Long projectId,

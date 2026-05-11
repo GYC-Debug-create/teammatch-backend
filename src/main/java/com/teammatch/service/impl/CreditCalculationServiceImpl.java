@@ -32,11 +32,7 @@ public class CreditCalculationServiceImpl implements CreditCalculationService {
                 evaluation.getProjectId()
         );
 
-        int cappedDelta = creditRuleService.calculateCappedDelta(
-                evaluation.getTargetId(),
-                evaluation.getProjectId(),
-                rawDelta
-        );
+        int cappedDelta = creditRuleService.calculateCappedDeltaFromExisting(existingProjectDelta, rawDelta);
 
         int projectTotalAfterApplied = existingProjectDelta + cappedDelta;
         boolean capped = (cappedDelta != rawDelta);
