@@ -47,4 +47,30 @@ public interface CreditChangeMapper extends BaseMapper<CreditChange> {
      */
     @Update("UPDATE credit_change SET description = #{description}, updated_at = NOW() WHERE id = #{id}")
     int updateDescription(@Param("id") Long id, @Param("description") String description);
+
+    /**
+     * 查询原评价信用流水（按精确四维键）
+     * M5-7 申诉恢复步骤5: 不预判 effective，由业务代码判断
+     */
+    @Select("SELECT * FROM credit_change WHERE source_type = #{sourceType} " +
+            "AND source_id = #{sourceId} AND change_type = #{changeType} " +
+            "AND user_id = #{userId} LIMIT 1")
+    CreditChange findBySourceTypeAndSourceIdAndChangeType(
+            @Param("sourceType") String sourceType,
+            @Param("sourceId") Long sourceId,
+            @Param("changeType") String changeType,
+            @Param("userId") Long userId);
+
+    /**
+     * 查询 appeal_restore 流水是否已存在（幂等检查）
+     * M5-7 申诉恢复步骤7
+     */
+    @Select("SELECT * FROM credit_change WHERE source_type = #{sourceType} " +
+            "AND source_id = #{sourceId} AND change_type = #{changeType} " +
+            "AND user_id = #{userId} LIMIT 1")
+    CreditChange findAppealRestoreExists(
+            @Param("sourceType") String sourceType,
+            @Param("sourceId") Long sourceId,
+            @Param("changeType") String changeType,
+            @Param("userId") Long userId);
 }

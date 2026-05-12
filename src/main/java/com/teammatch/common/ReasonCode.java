@@ -64,6 +64,14 @@ public enum ReasonCode {
     INVALID_REVIEW_ACTION("M5007", "无效的复核操作"),
     REVIEW_NOTE_TOO_LONG("M5008", "复核备注过长"),
 
+    // 申诉恢复错误（M50xx）
+    APPEAL_NOT_FOUND("M5009", "申诉记录不存在"),
+    APPEAL_NOT_APPROVED("M5010", "申诉尚未通过审批"),
+    INVALID_APPEAL_TARGET_TYPE("M5011", "申诉目标类型不是评价"),
+
+    // 评价无效（英文常量名，与 ALREADY_EVALUATED 等一致）
+    EVALUATION_ALREADY_INVALIDATED("EVALUATION_ALREADY_INVALIDATED", "评价已被判定无效"),
+
     // 通用错误
     UNKNOWN_ERROR("M9999", "未知错误");
 

@@ -76,4 +76,11 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
                      @Param("reviewerId") Long reviewerId,
                      @Param("reviewNote") String reviewNote,
                      @Param("reviewedAt") LocalDateTime reviewedAt);
+
+    /**
+     * SELECT ... FOR UPDATE 锁定 evaluation 行
+     * M5-7 申诉恢复使用，V2.1 8.7 D-11/D-13 并发协议
+     */
+    @Select("SELECT * FROM evaluation WHERE id = #{id} FOR UPDATE")
+    Evaluation selectByIdForUpdate(@Param("id") Long id);
 }
