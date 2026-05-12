@@ -1,5 +1,26 @@
 # IMPLEMENT_LOG
 
+## 2026-05-12 阶段进度总览
+
+| 模块 | 负责 | 进度 | 关键产出 |
+|---|---|---|---|
+| M3 认证/档案/技能 | 后端一 | ~95% | Auth + Profile Controller/Service，权限基础，技能标签 CRUD |
+| M4 项目/组队/退出 | 后端二 | ~90% | Project/TeamRequest/ExitVote Controller + Service，并发关闭协议，35+17 测试 |
+| M5 互评/信誉/申诉 | 后端三 | ~80% | 7/7 Service 完成（M5-1~M5-7），143 测试，**Controller 待补** |
+| M6 治理/部署 | 治理 | ~30% | Board 板块管理完成，Report/Penalty/申诉审批/Jenkins 未开始 |
+| M1 前端一 | 前端 | ~60-70% | 认证/档案/冷启动/项目浏览（7 页面） |
+| M2 前端二+后台 | 前端 | ~50-60% | 组队/退出/互评/信誉展示/管理端（6+5 页面） |
+
+**后端总体 ~74%，全项目总体 ~65-70%。** Phase 2 收尾阶段。
+
+**M5 待办：**
+- Controller 接口（互评资格/提交/列表/信誉分/评价复核管理端）
+- 与 M2 对齐互评页面字段、信誉分展示
+- 与 M6 对齐评价复核管理端入口、申诉流程边界
+- M5-7 Gerrit Change: https://gerrit.lilingkun.com/c/shixun12_backend/+/2792
+
+---
+
 ## 2026-05-12 M5-7 申诉恢复 Service
 
 - 新增 `AppealRestoreService` + `AppealRestoreServiceImpl`：对已批准的 `evaluation` 类申诉执行信誉恢复，追加 `appeal_restore` 流水并回写 `user.credit_score`，全链路 `@Transactional`。
