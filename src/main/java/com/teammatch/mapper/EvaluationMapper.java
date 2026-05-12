@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -63,4 +64,16 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
             "</foreach>" +
             "</script>")
     int batchUpdateStatus(@Param("ids") List<Long> ids, @Param("status") String status);
+
+    /**
+     * 评价复核：更新 evaluation 状态及复核字段
+     * 用于 M5-6 评价复核 Service
+     */
+    @Update("UPDATE evaluation SET status = #{status}, reviewer_id = #{reviewerId}, " +
+            "review_note = #{reviewNote}, reviewed_at = #{reviewedAt}, updated_at = NOW() " +
+            "WHERE id = #{id}")
+    int updateReview(@Param("id") Long id, @Param("status") String status,
+                     @Param("reviewerId") Long reviewerId,
+                     @Param("reviewNote") String reviewNote,
+                     @Param("reviewedAt") LocalDateTime reviewedAt);
 }

@@ -58,6 +58,12 @@ public enum ReasonCode {
     LOW_SCORE_MISSING_NEGATIVE_TAG("M5205", "低分缺少负向标签"),
     LOW_SCORE_COMMENT_TOO_SHORT("M5206", "低分评论过短"),
 
+    // 评价复核错误（M50xx）
+    EVALUATION_NOT_FOUND("M5005", "评价记录不存在"),
+    CREDIT_CHANGE_NOT_FOUND("M5006", "信誉分流水不存在或状态异常"),
+    INVALID_REVIEW_ACTION("M5007", "无效的复核操作"),
+    REVIEW_NOTE_TOO_LONG("M5008", "复核备注过长"),
+
     // 通用错误
     UNKNOWN_ERROR("M9999", "未知错误");
 
