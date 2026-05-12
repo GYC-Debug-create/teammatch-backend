@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
  * 用于存储项目结束后的四维互评数据：沟通、任务、技能、责任
  */
 public class Evaluation {
+    public static final String STATUS_NORMAL = "normal";
+    public static final String STATUS_PENDING_REVIEW = "pending_review";
+    public static final String STATUS_VOIDED = "voided";
+    public static final String STATUS_KEPT_NO_CREDIT = "kept_no_credit";
+
     /** 互评记录ID */
     private Long id;
 

@@ -5,6 +5,7 @@ import com.teammatch.entity.User;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -31,4 +32,7 @@ public interface UserMapper extends BaseMapper<User> {
             "</foreach>" +
             "</script>")
     List<User> findByIds(@Param("userIds") List<Long> userIds);
+
+    @Update("UPDATE user SET credit_score = credit_score + #{delta} WHERE id = #{userId}")
+    int updateCreditScore(@Param("userId") Long userId, @Param("delta") int delta);
 }

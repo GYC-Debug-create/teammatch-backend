@@ -5,6 +5,7 @@ import com.teammatch.entity.Evaluation;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -54,4 +55,12 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
     @Select("SELECT * FROM evaluation WHERE evaluator_id = #{evaluatorId} AND project_id = #{projectId} ORDER BY id")
     List<Evaluation> findByEvaluatorAndProject(@Param("evaluatorId") Long evaluatorId,
                                                @Param("projectId") Long projectId);
+
+    @Update("<script>" +
+            "UPDATE evaluation SET status = #{status}, updated_at = NOW() WHERE id IN " +
+            "<foreach collection='ids' item='id' open='(' separator=',' close=')'>" +
+            "#{id}" +
+            "</foreach>" +
+            "</script>")
+    int batchUpdateStatus(@Param("ids") List<Long> ids, @Param("status") String status);
 }
