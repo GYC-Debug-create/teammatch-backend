@@ -13,6 +13,7 @@ import com.teammatch.m4.service.ProjectService;
 import com.teammatch.m4.service.ProjectSkillService;
 import com.teammatch.m4.service.TeamMemberService;
 import com.teammatch.m4.service.TeamRequestService;
+import com.teammatch.m6.service.BoardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ public class ProjectServiceImpl extends ServiceImpl<M4ProjectMapper, Project> im
 
     private final ProjectSkillService projectSkillService;
     private final TeamMemberService teamMemberService;
+    private final BoardService boardService;
 
     @Autowired
     @Lazy
@@ -38,6 +40,10 @@ public class ProjectServiceImpl extends ServiceImpl<M4ProjectMapper, Project> im
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Project createProject(ProjectCreateDTO dto) {
+        // 0. 校验 boardId 对应的板块必须存在且状态为 active
+        if (dto.getBoardId() == null || !boardService.existsActiveBoard(dto.getBoardId())) {
+            throw new RuntimeException("板块不存在或已禁用");
+        }
         // 1. 创建 Project 主表记录 (默认为 recruiting)
         Project project = new Project();
         BeanUtils.copyProperties(dto, project);
