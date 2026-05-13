@@ -1,0 +1,259 @@
+package com.teammatch.m3;
+
+import com.teammatch.common.ReasonCode;
+import com.teammatch.common.Result;
+import com.teammatch.controller.ProfileController;
+import com.teammatch.dto.AddSkillTagRequest;
+import com.teammatch.dto.UpdateProfileRequest;
+import com.teammatch.dto.UpdateUserSkillsRequest;
+import com.teammatch.entity.SkillTag;
+import com.teammatch.exception.DuplicateDataException;
+import com.teammatch.exception.NotFoundException;
+import com.teammatch.service.AuthService;
+import com.teammatch.service.ProfileService;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+/**
+ * M3 ProfileController 单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("M3 ProfileController 测试")
+class ProfileControllerTest {
+
+    private static final String JWT_SECRET = "<REDACTED>";
+    private static final Long TEST_USER_ID = 1L;
+
+    @Mock
+    private ProfileService profileService;
+
+    @Mock
+    private AuthService authService;
+
+    @InjectMocks
+    private ProfileController profileController;
+
+    private String validToken;
+
+    @BeforeEach
+    void setUp() {
+        validToken = "Bearer " + Jwts.builder()
+                .setSubject(String.valueOf(TEST_USER_ID))
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+                .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
+                .compact();
+    }
+
+    @Test
+    @DisplayName("updateProfile - 成功更新档案应返回成功")
+    void updateProfile_shouldReturnSuccess() {
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setNickname("NewNickname");
+        request.setSchool("NewSchool");
+        request.setMajor("CS");
+
+        doNothing().when(profileService).updateProfile(eq(TEST_USER_ID), any());
+
+        Result<Void> result = profileController.updateProfile(request, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).updateProfile(eq(TEST_USER_ID), any());
+    }
+
+    @Test
+    @DisplayName("bindGithub - 成功绑定 GitHub 应返回成功")
+    void bindGithub_shouldReturnSuccess() {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("githubUsername", "testgithub");
+
+        doNothing().when(profileService).bindGithub(eq(TEST_USER_ID), eq("testgithub"));
+
+        Result<Void> result = profileController.bindGithub(params, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).bindGithub(eq(TEST_USER_ID), eq("testgithub"));
+    }
+
+    @Test
+    @DisplayName("updateGithub - 成功更新 GitHub 用户名应返回成功")
+    void updateGithub_shouldReturnSuccess() {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("githubUsername", "newgithub");
+
+        doNothing().when(profileService).updateGithub(eq(TEST_USER_ID), eq("newgithub"));
+
+        Result<Void> result = profileController.updateGithub(params, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).updateGithub(eq(TEST_USER_ID), eq("newgithub"));
+    }
+
+    @Test
+    @DisplayName("updateGithub - GitHub 未绑定应返回失败")
+    void updateGithub_notBound_shouldReturnFail() {
+        java.util.Map<String, String> params = new java.util.HashMap<>();
+        params.put("githubUsername", "newgithub");
+
+        doThrow(new RuntimeException(com.teammatch.common.ReasonCode.GITHUB_NOT_BOUND.getMessage()))
+                .when(profileService).updateGithub(eq(TEST_USER_ID), eq("newgithub"));
+
+        Result<Void> result = profileController.updateGithub(params, validToken);
+
+        assertThat(result.isSuccess()).isFalse();
+    }
+
+    @Test
+    @DisplayName("addSkill - 成功添加技能应返回成功")
+    void addSkill_shouldReturnSuccess() {
+        java.util.Map<String, Long> params = new java.util.HashMap<>();
+        params.put("skillTagId", 1L);
+
+        doNothing().when(profileService).addSkill(eq(TEST_USER_ID), eq(1L));
+
+        Result<Void> result = profileController.addSkill(params, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).addSkill(eq(TEST_USER_ID), eq(1L));
+    }
+
+    @Test
+    @DisplayName("updateUserSkills - 成功更新技能列表应返回成功")
+    void updateUserSkills_shouldReturnSuccess() {
+        UpdateUserSkillsRequest request = new UpdateUserSkillsRequest();
+        request.setSkillTagIds(Arrays.asList(1L, 2L, 3L));
+
+        doNothing().when(profileService).updateUserSkills(eq(TEST_USER_ID), eq(Arrays.asList(1L, 2L, 3L)));
+
+        Result<Void> result = profileController.updateUserSkills(request, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).updateUserSkills(eq(TEST_USER_ID), eq(Arrays.asList(1L, 2L, 3L)));
+    }
+
+    @Test
+    @DisplayName("updateUserSkills - 清空技能列表应返回成功")
+    void updateUserSkills_emptyList_shouldReturnSuccess() {
+        UpdateUserSkillsRequest request = new UpdateUserSkillsRequest();
+        request.setSkillTagIds(Collections.emptyList());
+
+        doNothing().when(profileService).updateUserSkills(eq(TEST_USER_ID), eq(Collections.emptyList()));
+
+        Result<Void> result = profileController.updateUserSkills(request, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("updateUserSkills - 技能标签不存在应返回失败")
+    void updateUserSkills_skillNotFound_shouldReturnFail() {
+        UpdateUserSkillsRequest request = new UpdateUserSkillsRequest();
+        request.setSkillTagIds(Arrays.asList(999L));
+
+        doThrow(new NotFoundException(com.teammatch.common.ReasonCode.SKILL_TAG_NOT_FOUND))
+                .when(profileService).updateUserSkills(eq(TEST_USER_ID), any());
+
+        Result<Void> result = profileController.updateUserSkills(request, validToken);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.SKILL_TAG_NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("listSkillTags - 应返回技能标签列表")
+    void listSkillTags_shouldReturnTagList() {
+        SkillTag tag1 = new SkillTag();
+        tag1.setId(1L);
+        tag1.setName("Java");
+        tag1.setCategory("language");
+
+        SkillTag tag2 = new SkillTag();
+        tag2.setId(2L);
+        tag2.setName("Python");
+        tag2.setCategory("language");
+
+        List<SkillTag> tags = Arrays.asList(tag1, tag2);
+        when(profileService.listActiveSkillTags()).thenReturn(tags);
+
+        Result<List<SkillTag>> result = profileController.listSkillTags();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).hasSize(2);
+        assertThat(result.getData().get(0).getName()).isEqualTo("Java");
+    }
+
+    @Test
+    @DisplayName("listSkillTags - 无技能标签时应返回空列表")
+    void listSkillTags_emptyList_shouldReturnEmpty() {
+        when(profileService.listActiveSkillTags()).thenReturn(Collections.emptyList());
+
+        Result<List<SkillTag>> result = profileController.listSkillTags();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("addSkillTag - 管理员成功添加技能标签应返回成功")
+    void addSkillTag_adminSuccess_shouldReturnSuccess() {
+        AddSkillTagRequest request = new AddSkillTagRequest();
+        request.setName("Spring Boot");
+        request.setCategory("framework");
+
+        when(authService.isAdmin(validToken)).thenReturn(true);
+        doNothing().when(profileService).addSkillTag(any(SkillTag.class));
+
+        Result<Void> result = profileController.addSkillTag(request, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        verify(profileService).addSkillTag(any(SkillTag.class));
+    }
+
+    @Test
+    @DisplayName("addSkillTag - 非管理员应返回权限错误")
+    void addSkillTag_nonAdmin_shouldReturnFail() {
+        AddSkillTagRequest request = new AddSkillTagRequest();
+        request.setName("Spring Boot");
+
+        when(authService.isAdmin(validToken)).thenReturn(false);
+
+        Result<Void> result = profileController.addSkillTag(request, validToken);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.ADMIN_REQUIRED.getCode());
+    }
+
+    @Test
+    @DisplayName("addSkillTag - 技能标签已存在应返回失败")
+    void addSkillTag_duplicate_shouldReturnFail() {
+        AddSkillTagRequest request = new AddSkillTagRequest();
+        request.setName("Java");
+        request.setCategory("language");
+
+        when(authService.isAdmin(validToken)).thenReturn(true);
+        doThrow(new DuplicateDataException(ReasonCode.SKILL_TAG_ALREADY_EXISTS))
+                .when(profileService).addSkillTag(any(SkillTag.class));
+
+        Result<Void> result = profileController.addSkillTag(request, validToken);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.SKILL_TAG_ALREADY_EXISTS.getCode());
+    }
+}
