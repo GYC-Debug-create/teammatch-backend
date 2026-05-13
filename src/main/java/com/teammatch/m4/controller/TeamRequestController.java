@@ -1,9 +1,10 @@
 package com.teammatch.m4.controller;
 
+import com.teammatch.common.ReasonCode;
+import com.teammatch.common.Result;
 import com.teammatch.m4.dto.TeamRequestDTO;
 import com.teammatch.m4.service.TeamRequestService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,65 +16,65 @@ public class TeamRequestController {
 
     /** T-122 队长发送邀请 */
     @PostMapping("/invite")
-    public ResponseEntity<?> sendInvite(@RequestBody TeamRequestDTO dto) {
+    public Result<Void> sendInvite(@RequestBody TeamRequestDTO dto) {
         try {
             teamRequestService.sendRequest(dto, "invite");
-            return ResponseEntity.ok("邀请发送成功");
+            return Result.success();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return Result.fail(ReasonCode.STATUS_CONFLICT);
         }
     }
 
     /** T-123 用户申请加入项目 */
     @PostMapping("/apply")
-    public ResponseEntity<?> sendApply(@RequestBody TeamRequestDTO dto) {
+    public Result<Void> sendApply(@RequestBody TeamRequestDTO dto) {
         try {
             teamRequestService.sendRequest(dto, "apply");
-            return ResponseEntity.ok("申请发送成功");
+            return Result.success();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return Result.fail(ReasonCode.STATUS_CONFLICT);
         }
     }
 
     /** T-124 接受请求 */
     @PostMapping("/{id}/accept")
-    public ResponseEntity<?> acceptRequest(@PathVariable Long id, @RequestParam Long operatorId) {
+    public Result<Void> acceptRequest(@PathVariable Long id, @RequestParam Long operatorId) {
         try {
             teamRequestService.acceptRequest(id, operatorId);
-            return ResponseEntity.ok("请求已接受");
+            return Result.success();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return Result.fail(ReasonCode.STATUS_CONFLICT);
         }
     }
 
     /** T-129 拒绝请求 */
     @PostMapping("/{id}/reject")
-    public ResponseEntity<?> rejectRequest(@PathVariable Long id, @RequestParam Long operatorId) {
+    public Result<Void> rejectRequest(@PathVariable Long id, @RequestParam Long operatorId) {
         try {
             teamRequestService.rejectRequest(id, operatorId);
-            return ResponseEntity.ok("请求已拒绝");
+            return Result.success();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return Result.fail(ReasonCode.STATUS_CONFLICT);
         }
     }
 
     /** T-130 取消请求 */
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<?> cancelRequest(@PathVariable Long id, @RequestParam Long operatorId) {
+    public Result<Void> cancelRequest(@PathVariable Long id, @RequestParam Long operatorId) {
         try {
             teamRequestService.cancelRequest(id, operatorId);
-            return ResponseEntity.ok("请求已取消");
+            return Result.success();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return Result.fail(ReasonCode.M4_RESOURCE_NOT_FOUND);
         }
     }
 
     /** T-131 收到/发出的请求列表 */
     @GetMapping
-    public ResponseEntity<?> getRequestList(
+    public Result<?> getRequestList(
             @RequestParam Long userId,
             @RequestParam(defaultValue = "received") String direction) {
-        return ResponseEntity.ok(teamRequestService.getRequestList(userId, direction));
+        return Result.success(teamRequestService.getRequestList(userId, direction));
     }
 }
 
