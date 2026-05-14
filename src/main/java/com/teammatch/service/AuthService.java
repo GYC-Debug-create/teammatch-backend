@@ -76,4 +76,13 @@ public interface AuthService {
      * @return JWT Token 字符串
      */
     String generateToken(User user);
+
+    /**
+     * 从 Token 中解析用户 ID
+     * 
+     * @param token JWT Token（可带 "Bearer " 前缀）
+     * @return 用户 ID
+     * @throws RuntimeException Token 无效或过期
+     */
+    Long getUserIdFromToken(String token);
 }

@@ -569,6 +569,65 @@ class AuthServiceImplTest {
         verify(userMapper).updateById(targetUser);
     }
 
+    // ==================== getUserIdFromToken 测试 ====================
+
+    @Test
+    @DisplayName("getUserIdFromToken - 从有效 Token 中应正确解析用户 ID")
+    void getUserIdFromToken_validToken_shouldReturnUserId() {
+        // 生成一个有效的 Token
+        String token = Jwts.builder()
+                .setSubject(String.valueOf(TEST_USER_ID))
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+                .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
+                .compact();
+
+        Long userId = authService.getUserIdFromToken("Bearer " + token);
+
+        assertThat(userId).isEqualTo(TEST_USER_ID);
+    }
+
+    @Test
+    @DisplayName("getUserIdFromToken - 不带 Bearer 前缀的 Token 也应正确解析")
+    void getUserIdFromToken_withoutBearerPrefix_shouldReturnUserId() {
+        String token = Jwts.builder()
+                .setSubject(String.valueOf(999L))
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+                .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
+                .compact();
+
+        Long userId = authService.getUserIdFromToken(token);
+
+        assertThat(userId).isEqualTo(999L);
+    }
+
+    @Test
+    @DisplayName("getUserIdFromToken - 无效 Token 应抛出异常")
+    void getUserIdFromToken_invalidToken_shouldThrowException() {
+        String invalidToken = "<REDACTED>";
+
+        assertThatThrownBy(() -> authService.getUserIdFromToken(invalidToken))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Invalid or expired token");
+    }
+
+    @Test
+    @DisplayName("getUserIdFromToken - 过期 Token 应抛出异常")
+    void getUserIdFromToken_expiredToken_shouldThrowException() {
+        // 生成一个已过期的 Token
+        String expiredToken = Jwts.builder()
+                .setSubject(String.valueOf(TEST_USER_ID))
+                .setIssuedAt(new Date(System.currentTimeMillis() - 8 * 24 * 60 * 60 * 1000)) // 8天前
+                .setExpiration(new Date(System.currentTimeMillis() - 1 * 24 * 60 * 60 * 1000)) // 1天前过期
+                .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
+                .compact();
+
+        assertThatThrownBy(() -> authService.getUserIdFromToken(expiredToken))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Invalid or expired token");
+    }
+
     // ==================== 辅助方法 ====================
 
     private User createAdminUser() {

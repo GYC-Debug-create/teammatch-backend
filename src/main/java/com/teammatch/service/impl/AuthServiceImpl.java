@@ -330,10 +330,8 @@ public class AuthServiceImpl implements AuthService {
         return user != null && "admin".equals(user.getRole());
     }
 
-    /**
-     * 从 Token 中解析用户 ID
-     */
-    private Long getUserIdFromToken(String token) {
+    @Override
+    public Long getUserIdFromToken(String token) {
         // 移除 "Bearer " 前缀
         if (token.startsWith("Bearer ")) {
             token = token.substring(7);
