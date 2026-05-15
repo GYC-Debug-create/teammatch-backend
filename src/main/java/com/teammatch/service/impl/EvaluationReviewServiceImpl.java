@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 
 /**
  * M5-6 评价复核 Service 实现
@@ -102,18 +101,18 @@ public class EvaluationReviewServiceImpl implements EvaluationReviewService {
         log.info("Review approve evaluationId={} targetId={} creditDelta={}",
                 evaluation.getId(), evaluation.getTargetId(), cc.getChangeValue());
 
-        // 更新 evaluation: status=normal, 写入复核字段
-        int updatedEval = evaluationMapper.updateReview(evaluation.getId(),
+        // 条件更新 evaluation: 仅当 status='pending_review' 时生效
+        int updatedEval = evaluationMapper.updateReviewIfPending(evaluation.getId(),
                 Evaluation.STATUS_NORMAL, command.getReviewerId(), command.getReviewNote(), now);
         if (updatedEval != 1) {
-            throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "更新评价状态失败");
+            throw new BusinessException(ReasonCode.STATUS_CONFLICT, "评价状态已变更，无法重复复核");
         }
 
-        // 更新 credit_change: effective 0→1
-        int updatedCc = creditChangeMapper.batchUpdateEffective(
-                Collections.singletonList(cc.getId()), true);
+        // 原子性翻转 credit_change.effective 0→1（完整条件守卫）
+        int updatedCc = creditChangeMapper.updateEffectiveToTrue(
+                cc.getId(), "evaluation", evaluation.getId(), "evaluation", evaluation.getTargetId());
         if (updatedCc != 1) {
-            throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "更新信誉分流水 effective 失败");
+            throw new BusinessException(ReasonCode.STATUS_CONFLICT, "信誉分流水已生效，无法重复操作");
         }
 
         // 更新 user.credit_score：增量加回 change_value
@@ -126,10 +125,10 @@ public class EvaluationReviewServiceImpl implements EvaluationReviewService {
                              LocalDateTime now) {
         log.info("Review void evaluationId={}", evaluation.getId());
 
-        int updatedEval = evaluationMapper.updateReview(evaluation.getId(),
+        int updatedEval = evaluationMapper.updateReviewIfPending(evaluation.getId(),
                 Evaluation.STATUS_VOIDED, command.getReviewerId(), command.getReviewNote(), now);
         if (updatedEval != 1) {
-            throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "更新评价状态失败");
+            throw new BusinessException(ReasonCode.STATUS_CONFLICT, "评价状态已变更，无法重复复核");
         }
     }
 
@@ -137,10 +136,10 @@ public class EvaluationReviewServiceImpl implements EvaluationReviewService {
                                       CreditChange cc, LocalDateTime now) {
         log.info("Review keep_no_credit evaluationId={}", evaluation.getId());
 
-        int updatedEval = evaluationMapper.updateReview(evaluation.getId(),
+        int updatedEval = evaluationMapper.updateReviewIfPending(evaluation.getId(),
                 Evaluation.STATUS_KEPT_NO_CREDIT, command.getReviewerId(), command.getReviewNote(), now);
         if (updatedEval != 1) {
-            throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "更新评价状态失败");
+            throw new BusinessException(ReasonCode.STATUS_CONFLICT, "评价状态已变更，无法重复复核");
         }
 
         String desc = "项目互评信誉变化 [复核: 保留但不计分" +

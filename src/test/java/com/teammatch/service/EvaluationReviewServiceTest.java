@@ -21,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,6 +34,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,9 +93,9 @@ class EvaluationReviewServiceTest {
         suspendedCc.setDescription("项目互评信誉变化");
 
         // 默认 Mapper 写操作成功
-        lenient().when(evaluationMapper.updateReview(anyLong(), anyString(),
+        lenient().when(evaluationMapper.updateReviewIfPending(anyLong(), anyString(),
                 anyLong(), any(), any())).thenReturn(1);
-        lenient().when(creditChangeMapper.batchUpdateEffective(anyList(), eq(true)))
+        lenient().when(creditChangeMapper.updateEffectiveToTrue(anyLong(), anyString(), anyLong(), anyString(), anyLong()))
                 .thenReturn(1);
         lenient().when(creditChangeMapper.updateDescription(anyLong(), anyString()))
                 .thenReturn(1);
@@ -126,10 +126,10 @@ class EvaluationReviewServiceTest {
         assertThat(data.getCreditEffectiveChanged()).isTrue();
 
         // 验证 evaluation 状态更新
-        verify(evaluationMapper).updateReview(eq(EVALUATION_ID), eq("normal"),
+        verify(evaluationMapper).updateReviewIfPending(eq(EVALUATION_ID), eq("normal"),
                 eq(REVIEWER_ID), eq("经复核，评价合理"), any(LocalDateTime.class));
         // 验证 credit_change.effective 0→1
-        verify(creditChangeMapper).batchUpdateEffective(Collections.singletonList(CC_ID), true);
+        verify(creditChangeMapper).updateEffectiveToTrue(CC_ID, "evaluation", EVALUATION_ID, "evaluation", TARGET_ID);
         // 验证 credit_score 更新
         verify(userMapper).updateCreditScore(TARGET_ID, -5);
     }
@@ -147,7 +147,7 @@ class EvaluationReviewServiceTest {
         Result<EvaluationReviewResult> result = service.review(command);
 
         assertThat(result.isSuccess()).isTrue();
-        verify(evaluationMapper).updateReview(eq(EVALUATION_ID), eq("normal"),
+        verify(evaluationMapper).updateReviewIfPending(eq(EVALUATION_ID), eq("normal"),
                 eq(REVIEWER_ID), eq(null), any(LocalDateTime.class));
     }
 
@@ -164,7 +164,7 @@ class EvaluationReviewServiceTest {
         Result<EvaluationReviewResult> result = service.review(command);
 
         assertThat(result.isSuccess()).isTrue();
-        verify(evaluationMapper).updateReview(eq(EVALUATION_ID), anyString(),
+        verify(evaluationMapper).updateReviewIfPending(eq(EVALUATION_ID), anyString(),
                 eq(77L), eq("复核通过"), any(LocalDateTime.class));
     }
 
@@ -190,10 +190,10 @@ class EvaluationReviewServiceTest {
         assertThat(data.getCreditEffectiveChanged()).isFalse();
 
         // 验证 evaluation 状态更新
-        verify(evaluationMapper).updateReview(eq(EVALUATION_ID), eq("voided"),
+        verify(evaluationMapper).updateReviewIfPending(eq(EVALUATION_ID), eq("voided"),
                 eq(REVIEWER_ID), eq("作废处理"), any(LocalDateTime.class));
         // 验证不更新 credit_change.effective
-        verify(creditChangeMapper, never()).batchUpdateEffective(anyList(), any());
+        verify(creditChangeMapper, never()).updateEffectiveToTrue(anyLong(), anyString(), anyLong(), anyString(), anyLong());
         // 验证不更新 credit_score
         verify(userMapper, never()).updateCreditScore(anyLong(), anyInt());
     }
@@ -234,9 +234,9 @@ class EvaluationReviewServiceTest {
         assertThat(data.getNewStatus()).isEqualTo("kept_no_credit");
         assertThat(data.getCreditEffectiveChanged()).isFalse();
 
-        verify(evaluationMapper).updateReview(eq(EVALUATION_ID), eq("kept_no_credit"),
+        verify(evaluationMapper).updateReviewIfPending(eq(EVALUATION_ID), eq("kept_no_credit"),
                 eq(REVIEWER_ID), eq("保留但不计分"), any(LocalDateTime.class));
-        verify(creditChangeMapper, never()).batchUpdateEffective(anyList(), any());
+        verify(creditChangeMapper, never()).updateEffectiveToTrue(anyLong(), anyString(), anyLong(), anyString(), anyLong());
         verify(creditChangeMapper).updateDescription(eq(CC_ID),
                 contains("保留但不计分"));
         verify(userMapper, never()).updateCreditScore(anyLong(), anyInt());
@@ -375,7 +375,7 @@ class EvaluationReviewServiceTest {
 
         assertThat(result.isFail()).isTrue();
         assertThat(result.getCode()).isEqualTo(ReasonCode.CREDIT_CHANGE_NOT_FOUND.getCode());
-        verify(evaluationMapper, never()).updateReview(anyLong(), anyString(),
+        verify(evaluationMapper, never()).updateReviewIfPending(anyLong(), anyString(),
                 anyLong(), anyString(), any());
     }
 
@@ -393,7 +393,7 @@ class EvaluationReviewServiceTest {
 
         assertThat(result.isFail()).isTrue();
         assertThat(result.getCode()).isEqualTo(ReasonCode.CREDIT_CHANGE_NOT_FOUND.getCode());
-        verify(evaluationMapper, never()).updateReview(anyLong(), anyString(),
+        verify(evaluationMapper, never()).updateReviewIfPending(anyLong(), anyString(),
                 anyLong(), anyString(), any());
     }
 
@@ -410,7 +410,7 @@ class EvaluationReviewServiceTest {
 
         assertThat(result.isFail()).isTrue();
         assertThat(result.getCode()).isEqualTo(ReasonCode.STATUS_CONFLICT.getCode());
-        verify(creditChangeMapper, never()).batchUpdateEffective(anyList(), any());
+        verify(creditChangeMapper, never()).updateEffectiveToTrue(anyLong(), anyString(), anyLong(), anyString(), anyLong());
         verify(userMapper, never()).updateCreditScore(anyLong(), anyInt());
     }
 
@@ -479,13 +479,13 @@ class EvaluationReviewServiceTest {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(pendingEvaluation);
         when(creditChangeMapper.findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID))
                 .thenReturn(suspendedCc);
-        when(evaluationMapper.updateReview(anyLong(), anyString(), anyLong(),
+        when(evaluationMapper.updateReviewIfPending(anyLong(), anyString(), anyLong(),
                 any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> service.review(command))
                 .isInstanceOf(BusinessException.class);
 
-        verify(creditChangeMapper, never()).batchUpdateEffective(anyList(), eq(true));
+        verify(creditChangeMapper, never()).updateEffectiveToTrue(anyLong(), anyString(), anyLong(), anyString(), anyLong());
         verify(userMapper, never()).updateCreditScore(anyLong(), anyInt());
     }
 
@@ -498,8 +498,8 @@ class EvaluationReviewServiceTest {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(pendingEvaluation);
         when(creditChangeMapper.findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID))
                 .thenReturn(suspendedCc);
-        when(creditChangeMapper.batchUpdateEffective(Collections.singletonList(CC_ID), true))
-                .thenReturn(0);
+        when(creditChangeMapper.updateEffectiveToTrue(eq(CC_ID), eq("evaluation"),
+                eq(EVALUATION_ID), eq("evaluation"), eq(TARGET_ID))).thenReturn(0);
 
         assertThatThrownBy(() -> service.review(command))
                 .isInstanceOf(BusinessException.class);
@@ -531,7 +531,7 @@ class EvaluationReviewServiceTest {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(pendingEvaluation);
         when(creditChangeMapper.findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID))
                 .thenReturn(suspendedCc);
-        when(evaluationMapper.updateReview(anyLong(), anyString(), anyLong(),
+        when(evaluationMapper.updateReviewIfPending(anyLong(), anyString(), anyLong(),
                 any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> service.review(command))
@@ -547,7 +547,7 @@ class EvaluationReviewServiceTest {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(pendingEvaluation);
         when(creditChangeMapper.findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID))
                 .thenReturn(suspendedCc);
-        when(evaluationMapper.updateReview(anyLong(), anyString(), anyLong(),
+        when(evaluationMapper.updateReviewIfPending(anyLong(), anyString(), anyLong(),
                 any(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> service.review(command))
@@ -587,5 +587,33 @@ class EvaluationReviewServiceTest {
         service.review(command);
 
         verify(creditChangeMapper).findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID);
+    }
+
+    // ==================== 并发重复 approve 防护 ====================
+
+    @Test
+    @DisplayName("重复approve：第二次条件更新返回0→STATUS_CONFLICT，credit_score仅更新一次")
+    void approveDuplicateShouldUpdateCreditScoreOnlyOnce() {
+        EvaluationReviewCommand command = new EvaluationReviewCommand(
+                EVALUATION_ID, REVIEWER_ID, "approve", "复核通过");
+
+        when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(pendingEvaluation);
+        when(creditChangeMapper.findSuspendedOne("evaluation", EVALUATION_ID, "evaluation", TARGET_ID))
+                .thenReturn(suspendedCc);
+        when(evaluationMapper.updateReviewIfPending(eq(EVALUATION_ID), eq("normal"),
+                eq(REVIEWER_ID), eq("复核通过"), any(LocalDateTime.class)))
+                .thenReturn(1).thenReturn(0);
+
+        // 第一次 approve 成功
+        Result<EvaluationReviewResult> result1 = service.review(command);
+        assertThat(result1.isSuccess()).isTrue();
+        verify(userMapper).updateCreditScore(TARGET_ID, -5);
+
+        // 第二次 approve：条件更新返回0，抛 STATUS_CONFLICT
+        assertThatThrownBy(() -> service.review(command))
+                .isInstanceOf(BusinessException.class);
+
+        // credit_score 仅更新一次
+        verify(userMapper, times(1)).updateCreditScore(anyLong(), anyInt());
     }
 }

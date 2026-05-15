@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -644,5 +645,77 @@ class EvaluationSubmitServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getData().getEvaluationStatus()).isEqualTo("normal");
         verify(userMapper).updateCreditScore(TARGET_ID, -5);
+    }
+
+    // ==================== P0-1: 异常挂起不应撤销 appeal_restore 流水 ====================
+
+    @Test
+    @DisplayName("异常挂起不应撤销 appeal_restore 流水：仅撤销 change_type='evaluation' 的流水")
+    void anomalyShouldNotSuspendAppealRestoreChanges() {
+        Long oldEvalId = 999L;
+        Long evalCcId = 888L;
+        Long oldTargetUserId = 3L;
+
+        CreditChange evalCc = new CreditChange();
+        evalCc.setId(evalCcId);
+        evalCc.setUserId(oldTargetUserId);
+        evalCc.setChangeValue(3);
+        evalCc.setEffective(true);
+        evalCc.setSourceType("evaluation");
+        evalCc.setSourceId(oldEvalId);
+
+        AnomalyDetectionResult anomalyResult = AnomalyDetectionResult.extremeLow(
+                Arrays.asList(EVALUATION_ID, oldEvalId));
+
+        when(eligibilityService.validateSubmission(EVALUATOR_ID, TARGET_ID, PROJECT_ID))
+                .thenReturn(Result.success());
+        when(validationService.validateSubmission(validDto))
+                .thenReturn(Result.success());
+        when(creditCalculationService.calculate(any(Evaluation.class)))
+                .thenReturn(creditResult);
+        when(anomalyDetectionService.detect(EVALUATOR_ID, PROJECT_ID))
+                .thenReturn(anomalyResult);
+        // Mapper 只返回 evaluation 类型的流水（appeal_restore 被 change_type='evaluation' 条件过滤）
+        when(creditChangeMapper.findBySourceTypeAndSourceIds(eq("evaluation"), anyList()))
+                .thenReturn(List.of(evalCc));
+        when(creditChangeMapper.batchUpdateEffective(eq(List.of(evalCcId)), eq(false)))
+                .thenReturn(1);
+        when(evaluationMapper.batchUpdateStatus(anyList(), eq("pending_review")))
+                .thenReturn(2);
+
+        Result<EvaluationSubmitResult> result = service.submit(validDto);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData().getEvaluationStatus()).isEqualTo("pending_review");
+        assertThat(result.getData().getEffective()).isFalse();
+
+        // 关键断言：batchUpdateEffective 仅包含 evaluation 类型的 credit_change id
+        verify(creditChangeMapper).batchUpdateEffective(List.of(evalCcId), false);
+        // 反向修正仅针对 evalCc 的 changeValue
+        verify(userMapper).updateCreditScore(oldTargetUserId, -3);
+        // 当前 credit_change 为 effective=false
+        verify(creditChangeMapper).insert(argThat(cc ->
+                cc.getSourceId().equals(EVALUATION_ID) && cc.getEffective() == false));
+    }
+
+    // ==================== P1: 重复提交唯一键冲突 ====================
+
+    @Test
+    @DisplayName("重复提交唯一键冲突：返回 ALREADY_EVALUATED，不写 credit_change 和 credit_score")
+    void duplicateEvaluationInsertShouldReturnAlreadyEvaluated() {
+        when(eligibilityService.validateSubmission(EVALUATOR_ID, TARGET_ID, PROJECT_ID))
+                .thenReturn(Result.success());
+        when(validationService.validateSubmission(validDto))
+                .thenReturn(Result.success());
+        when(evaluationMapper.insert(any(Evaluation.class)))
+                .thenThrow(new DuplicateKeyException("Duplicate entry for key 'uk_project_evaluator_target'"));
+
+        Result<EvaluationSubmitResult> result = service.submit(validDto);
+
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.ALREADY_EVALUATED.getCode());
+        verify(evaluationTagMapper, never()).insert(any());
+        verify(creditChangeMapper, never()).insert(any());
+        verify(userMapper, never()).updateCreditScore(anyLong(), anyInt());
     }
 }

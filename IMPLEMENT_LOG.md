@@ -1,5 +1,55 @@
 # IMPLEMENT_LOG
 
+## 2026-05-15 M5 Service 层收口风险修复
+
+本轮修复了 M5-1 到 M5-7 Service 层的 2 个 P0 阻塞问题和 1 个 P1 问题。
+
+### P0-1: credit_change 混查修复
+
+**问题：** `CreditChangeMapper.findBySourceTypeAndSourceIds` 只限定 `source_type`/`source_id`/`effective=1`，未限定 `change_type`。异常挂起（`handleAnomalyTriggered`）可能把同一 `evaluationId` 下的 `appeal_restore` 流水也查出来并置为 `effective=false`，污染账本，并可能导致后续 `appeal_restore` 幂等检查误判 `alreadyRestored`。
+
+**修复：** `CreditChangeMapper.findBySourceTypeAndSourceIds` 增加 `AND change_type = 'evaluation'` 条件，仅查询原始互评流水。
+
+**变更文件：** `CreditChangeMapper.java`
+
+### P0-2: approve 重复计分修复
+
+**问题：**
+1. `EvaluationMapper.updateReview` 的 WHERE 条件缺少 `status='pending_review'`，并发 approve 可重复更新状态。
+2. `CreditChangeMapper.batchUpdateEffective` 的 WHERE 条件缺少 `effective=0` 守卫，并发 approve 可重复生效同一流水。
+3. `void` / `keep_no_credit` 同样缺少条件更新守卫。
+
+**修复：**
+1. 新增 `EvaluationMapper.updateReviewIfPending`：WHERE 增加 `AND status = 'pending_review'`。
+2. 新增 `CreditChangeMapper.updateEffectiveToTrue`：原子性翻转 effective 0→1，限定完整条件（id + source_type + source_id + change_type + user_id + effective=0）。
+3. `EvaluationReviewServiceImpl.executeApprove` / `executeVoid` / `executeKeepNoCredit` 改用条件更新方法，rows != 1 时抛 `STATUS_CONFLICT`。
+4. `executeApprove` 中仅当 effective 0→1 更新 rows == 1 时才调用 `updateCreditScore`。
+
+**变更文件：** `EvaluationMapper.java`、`CreditChangeMapper.java`、`EvaluationReviewServiceImpl.java`
+
+### P1: 重复提交唯一键冲突映射 ALREADY_EVALUATED
+
+**问题：** 并发重复提交互评时，第二个 insert 可能命中 `uk_project_evaluator_target` 唯一键冲突，当前未显式转换为 `ALREADY_EVALUATED`，可能暴露为未知异常。
+
+**修复：** `EvaluationSubmitServiceImpl.submit` 中 `evaluationMapper.insert` 捕获 `DuplicateKeyException`，返回 `Result.fail(ReasonCode.ALREADY_EVALUATED)`。不引入锁。
+
+**变更文件：** `EvaluationSubmitServiceImpl.java`
+
+### skill_endorse 当前限制
+
+`skill_endorse` 目前仅 DDL / 实体到位，提交互评链路暂不写入。该能力不影响信誉分账本，后续由 M5-8 / M5-9 或专门任务承接。
+
+### 测试证据
+
+- `EvaluationSubmitServiceTest`: 24 测试（含新增 `anomalyShouldNotSuspendAppealRestoreChanges`、`duplicateEvaluationInsertShouldReturnAlreadyEvaluated`）
+- `EvaluationReviewServiceTest`: 28 测试（含新增 `approveDuplicateShouldUpdateCreditScoreOnlyOnce`，已更新现有测试适配新 Mapper 方法签名）
+- `AppealRestoreServiceTest`: 19 测试（无变更）
+- `CreditCalculationServiceTest`: 8 测试（无变更）
+- `CreditRuleServiceImplTest`: 35 测试（无变更）
+- 合计 **114 测试，全部通过**
+
+---
+
 ## 2026-05-12 阶段进度总览
 
 | 模块 | 负责 | 进度 | 关键产出 |

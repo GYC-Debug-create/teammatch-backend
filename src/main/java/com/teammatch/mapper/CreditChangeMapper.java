@@ -17,7 +17,7 @@ public interface CreditChangeMapper extends BaseMapper<CreditChange> {
             "<foreach collection='sourceIds' item='id' open='(' separator=',' close=')'>" +
             "#{id}" +
             "</foreach>" +
-            " AND effective = 1" +
+            " AND change_type = 'evaluation' AND effective = 1" +
             "</script>")
     List<CreditChange> findBySourceTypeAndSourceIds(@Param("sourceType") String sourceType,
                                                      @Param("sourceIds") List<Long> sourceIds);
@@ -47,6 +47,19 @@ public interface CreditChangeMapper extends BaseMapper<CreditChange> {
      */
     @Update("UPDATE credit_change SET description = #{description}, updated_at = NOW() WHERE id = #{id}")
     int updateDescription(@Param("id") Long id, @Param("description") String description);
+
+    /**
+     * 原子性翻转 effective 0→1（完整条件守卫）
+     * 防止并发 approve 重复生效同一流水
+     */
+    @Update("UPDATE credit_change SET effective = 1, updated_at = NOW() " +
+            "WHERE id = #{id} AND source_type = #{sourceType} AND source_id = #{sourceId} " +
+            "AND change_type = #{changeType} AND user_id = #{userId} AND effective = 0")
+    int updateEffectiveToTrue(@Param("id") Long id,
+                              @Param("sourceType") String sourceType,
+                              @Param("sourceId") Long sourceId,
+                              @Param("changeType") String changeType,
+                              @Param("userId") Long userId);
 
     /**
      * 查询原评价信用流水（按精确四维键）

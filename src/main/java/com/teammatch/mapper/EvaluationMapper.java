@@ -78,6 +78,18 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
                      @Param("reviewedAt") LocalDateTime reviewedAt);
 
     /**
+     * 评价复核条件更新：仅当 status='pending_review' 时更新
+     * 防止并发/重复复核导致状态覆盖或重复计分
+     */
+    @Update("UPDATE evaluation SET status = #{status}, reviewer_id = #{reviewerId}, " +
+            "review_note = #{reviewNote}, reviewed_at = #{reviewedAt}, updated_at = NOW() " +
+            "WHERE id = #{id} AND status = 'pending_review'")
+    int updateReviewIfPending(@Param("id") Long id, @Param("status") String status,
+                              @Param("reviewerId") Long reviewerId,
+                              @Param("reviewNote") String reviewNote,
+                              @Param("reviewedAt") LocalDateTime reviewedAt);
+
+    /**
      * SELECT ... FOR UPDATE 锁定 evaluation 行
      * M5-7 申诉恢复使用，V2.1 8.7 D-11/D-13 并发协议
      */

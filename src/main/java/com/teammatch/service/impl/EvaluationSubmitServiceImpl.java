@@ -21,6 +21,7 @@ import com.teammatch.service.EvaluationSubmitService;
 import com.teammatch.service.EvaluationValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,9 +83,16 @@ public class EvaluationSubmitServiceImpl implements EvaluationSubmitService {
 
         // ====== 以下步骤落库，失败抛异常由 @Transactional 回滚 ======
 
-        // Step 3: 插入 evaluation
+        // Step 3: 插入 evaluation（捕获唯一键冲突映射为 ALREADY_EVALUATED）
         Evaluation evaluation = buildEvaluation(dto);
-        int inserted = evaluationMapper.insert(evaluation);
+        int inserted;
+        try {
+            inserted = evaluationMapper.insert(evaluation);
+        } catch (DuplicateKeyException e) {
+            log.warn("Duplicate evaluation insert evaluatorId={} targetId={} projectId={}",
+                    evaluatorId, targetId, projectId);
+            return Result.fail(ReasonCode.ALREADY_EVALUATED);
+        }
         if (inserted != 1) {
             throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "插入评价记录失败");
         }
