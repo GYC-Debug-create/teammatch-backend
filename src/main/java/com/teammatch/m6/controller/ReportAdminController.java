@@ -93,9 +93,9 @@ public class ReportAdminController {
         }
 
         // 获取处理人ID（管理员ID）
-        Long handlerId = getUserIdFromToken(token);
+        Long handlerId = authService.getUserIdFromToken(token);
         if (handlerId == null) {
-            return Result.fail(ReasonCode.UNKNOWN_ERROR);
+            return Result.fail(ReasonCode.UNAUTHORIZED);
         }
 
         try {
@@ -105,29 +105,6 @@ public class ReportAdminController {
             return Result.fail(ReasonCode.NOT_FOUND);
         } catch (IllegalStateException e) {
             return Result.fail(ReasonCode.STATUS_CONFLICT);
-        }
-    }
-
-    /**
-     * 从 Token 中解析用户 ID
-     *
-     * TODO【M6-M3依赖】: 当前硬编码返回1L，需等待M3提供公共方法
-     * 问题：M3的AuthServiceImpl中有私有方法getUserIdFromToken，但未暴露到接口
-     * 建议：请M3在AuthService接口中添加：Long getUserIdFromToken(String token)
-     *
-     * @param token Authorization header
-     * @return 用户ID，解析失败返回null
-     */
-    private Long getUserIdFromToken(String token) {
-        try {
-            // 移除 "Bearer " 前缀
-            if (token.startsWith("Bearer ")) {
-                token = token.substring(7);
-            }
-            // FIXME【P0】: 硬编码返回1L，所有管理员共用同一ID，需M3提供真实解析方法
-            return 1L;
-        } catch (Exception e) {
-            return null;
         }
     }
 }

@@ -16,6 +16,7 @@ public enum ReasonCode {
     STATUS_CONFLICT("M1003", "状态冲突"),
 
     // M3 认证与档案错误（M30xx）
+    UNAUTHORIZED("M3000", "未授权，请重新登录"),
     FORMAL_PROFILE_REQUIRED("M3001", "需要先完成正式档案"),
     EMAIL_OCCUPIED("M3002", "该邮箱已被其他用户绑定"),
     INVALID_CODE("M3003", "验证码错误或已过期"),

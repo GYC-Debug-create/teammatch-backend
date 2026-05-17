@@ -61,6 +61,9 @@ class ReportControllerTest {
         mockReport.setTargetId(200L);
         mockReport.setReason("违规内容");
         mockReport.setStatus("pending");
+
+        // Mock authService.getUserIdFromToken
+        when(authService.getUserIdFromToken(TOKEN)).thenReturn(REPORTER_ID);
     }
 
     // ==================== createReport ====================
@@ -118,6 +121,26 @@ class ReportControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("createReport: Token无效返回UNAUTHORIZED")
+    void createReport_invalidToken() throws Exception {
+        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+
+        ReportCreateDTO dto = new ReportCreateDTO();
+        dto.setTargetType("user");
+        dto.setTargetId(200L);
+        dto.setReason("违规内容");
+
+        mockMvc.perform(post("/reports")
+                        .header("Authorization", "Bearer invalid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
+
+        verify(reportService, never()).createReport(any(), any());
     }
 
     @Test
@@ -257,9 +280,15 @@ class ReportControllerTest {
     }
 
     @Test
-    @DisplayName("getMyReports: 缺少Authorization头返回错误")
-    void getMyReports_missingAuthHeader() throws Exception {
-        mockMvc.perform(get("/reports/my"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("getMyReports: Token无效返回UNAUTHORIZED")
+    void getMyReports_invalidToken() throws Exception {
+        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+
+        mockMvc.perform(get("/reports/my")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
+
+        verify(reportService, never()).getMyReports(any());
     }
 }

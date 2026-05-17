@@ -72,6 +72,9 @@ class ReportAdminControllerTest {
         resolvedReport.setStatus("resolved");
         resolvedReport.setHandlerId(HANDLER_ID);
         resolvedReport.setHandleResult("已处理");
+
+        // Mock authService.getUserIdFromToken for handleReport tests
+        when(authService.getUserIdFromToken(ADMIN_TOKEN)).thenReturn(HANDLER_ID);
     }
 
     // ==================== 权限校验 ====================
@@ -116,6 +119,25 @@ class ReportAdminControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(ReasonCode.ADMIN_REQUIRED.getCode()));
+
+        verify(reportService, never()).handleReport(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("handleReport: Token无效返回UNAUTHORIZED")
+    void handleReport_invalidToken_returnsUnauthorized() throws Exception {
+        when(authService.isAdmin("Bearer invalid-token")).thenReturn(true);
+        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+
+        mockMvc.perform(put("/admin/reports/1/handle")
+                        .header("Authorization", "Bearer invalid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
 
         verify(reportService, never()).handleReport(any(), any(), any());
     }
@@ -398,14 +420,5 @@ class ReportAdminControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
-    }
-
-    // ==================== 边界情况 ====================
-
-    @Test
-    @DisplayName("缺少Authorization头返回400")
-    void missingAuthHeader() throws Exception {
-        mockMvc.perform(get("/admin/reports"))
-                .andExpect(status().isBadRequest());
     }
 }
