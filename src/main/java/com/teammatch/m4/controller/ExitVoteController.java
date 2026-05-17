@@ -116,6 +116,9 @@ public class ExitVoteController {
         if ("该用户不是项目的活跃成员".equals(message)) {
             return ReasonCode.M4_MEMBER_NOT_ACTIVE;
         }
+        if ("TEAM_VOTE_CONFLICT".equals(message)) {
+            return ReasonCode.M4_TEAM_VOTE_CONFLICT;
+        }
         return ReasonCode.UNKNOWN_ERROR;
     }
 
@@ -138,6 +141,9 @@ public class ExitVoteController {
         }
         if ("不能对队长发起退出投票".equals(message)) {
             return ReasonCode.STATUS_CONFLICT;
+        }
+        if ("INVALID_PENALTY_LEVEL".equals(message)) {
+            return ReasonCode.INVALID_PENALTY_LEVEL;
         }
         return ReasonCode.UNKNOWN_ERROR;
     }

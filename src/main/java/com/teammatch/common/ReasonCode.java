@@ -74,6 +74,8 @@ public enum ReasonCode {
     M4_TEAM_FULL("M4007", "团队成员已达上限"),
     M4_VOTE_ALREADY_CLOSED("M4008", "投票已结束"),
     M4_LEADER_CANNOT_EXIT("M4009", "队长不能退出，请先转让队长身份"),
+    INVALID_PENALTY_LEVEL("INVALID_PENALTY_LEVEL", "处罚级别缺失或不合法"),
+    M4_TEAM_VOTE_CONFLICT("TEAM_VOTE_CONFLICT", "退出操作冲突，请重试"),
 
     // 申诉恢复错误（M50xx）
     APPEAL_NOT_FOUND("M5009", "申诉记录不存在"),
