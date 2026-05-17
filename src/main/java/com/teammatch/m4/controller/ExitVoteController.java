@@ -1,11 +1,12 @@
 package com.teammatch.m4.controller;
 
+import com.teammatch.common.ReasonCode;
+import com.teammatch.common.Result;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
 import com.teammatch.m4.entity.ExitVote;
 import com.teammatch.m4.service.ExitVoteService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -24,11 +25,15 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/self?userId=xxx
      */
     @PostMapping("/self")
-    public ResponseEntity<?> selfExit(
+    public Result<Void> selfExit(
             @PathVariable Long projectId,
             @RequestParam Long userId) {
-        exitVoteService.selfExit(projectId, userId);
-        return ResponseEntity.ok("已成功退出项目");
+        try {
+            exitVoteService.selfExit(projectId, userId);
+            return Result.success();
+        } catch (Exception e) {
+            return Result.fail(mapSelfExitReason(e));
+        }
     }
 
     /**
@@ -36,11 +41,15 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/votes
      */
     @PostMapping("/votes")
-    public ResponseEntity<?> initiateVote(
+    public Result<ExitVote> initiateVote(
             @PathVariable Long projectId,
             @RequestBody ExitVoteCreateDTO dto) {
-        ExitVote vote = exitVoteService.initiateVote(projectId, dto);
-        return ResponseEntity.ok(vote);
+        try {
+            ExitVote vote = exitVoteService.initiateVote(projectId, dto);
+            return Result.success(vote);
+        } catch (Exception e) {
+            return Result.fail(mapInitiateVoteReason(e));
+        }
     }
 
     /**
@@ -48,11 +57,18 @@ public class ExitVoteController {
      * GET /m4/projects/{projectId}/exit/votes/{voteId}
      */
     @GetMapping("/votes/{voteId}")
-    public ResponseEntity<?> getVoteDetail(
+    public Result<ExitVote> getVoteDetail(
             @PathVariable Long projectId,
             @PathVariable Long voteId) {
-        ExitVote vote = exitVoteService.getVoteDetail(voteId);
-        return ResponseEntity.ok(vote);
+        try {
+            ExitVote vote = exitVoteService.getVoteDetail(voteId);
+            if (vote == null) {
+                return Result.fail(ReasonCode.M4_RESOURCE_NOT_FOUND);
+            }
+            return Result.success(vote);
+        } catch (Exception e) {
+            return Result.fail(ReasonCode.M4_RESOURCE_NOT_FOUND);
+        }
     }
 
     /**
@@ -60,12 +76,16 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/votes/{voteId}/submit
      */
     @PostMapping("/votes/{voteId}/submit")
-    public ResponseEntity<?> submitVote(
+    public Result<Void> submitVote(
             @PathVariable Long projectId,
             @PathVariable Long voteId,
             @RequestBody ExitVoteSubmitDTO dto) {
-        exitVoteService.submitVote(voteId, dto);
-        return ResponseEntity.ok("投票成功");
+        try {
+            exitVoteService.submitVote(voteId, dto);
+            return Result.success();
+        } catch (Exception e) {
+            return Result.fail(mapSubmitVoteReason(e));
+        }
     }
 
     /**
@@ -73,11 +93,83 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/votes/{voteId}/close?operatorId=xxx
      */
     @PostMapping("/votes/{voteId}/close")
-    public ResponseEntity<?> closeVote(
+    public Result<ExitVote> closeVote(
             @PathVariable Long projectId,
             @PathVariable Long voteId,
             @RequestParam Long operatorId) {
-        ExitVote result = exitVoteService.closeVote(voteId, operatorId);
-        return ResponseEntity.ok(result);
+        try {
+            ExitVote result = exitVoteService.closeVote(voteId, operatorId);
+            return Result.success(result);
+        } catch (Exception e) {
+            return Result.fail(mapCloseVoteReason(e));
+        }
+    }
+
+    private ReasonCode mapSelfExitReason(Exception e) {
+        String message = e.getMessage();
+        if ("项目不存在".equals(message)) {
+            return ReasonCode.M4_PROJECT_NOT_FOUND;
+        }
+        if ("队长不能主动退出，请先转让队长身份".equals(message)) {
+            return ReasonCode.M4_LEADER_CANNOT_EXIT;
+        }
+        if ("该用户不是项目的活跃成员".equals(message)) {
+            return ReasonCode.M4_MEMBER_NOT_ACTIVE;
+        }
+        return ReasonCode.UNKNOWN_ERROR;
+    }
+
+    private ReasonCode mapInitiateVoteReason(Exception e) {
+        String message = e.getMessage();
+        if ("项目不存在".equals(message)) {
+            return ReasonCode.M4_PROJECT_NOT_FOUND;
+        }
+        if ("只有进行中的项目才能发起退出投票".equals(message)) {
+            return ReasonCode.M4_PROJECT_STATUS_INVALID;
+        }
+        if ("只有队长可以发起退出投票".equals(message)) {
+            return ReasonCode.M4_NOT_LEADER;
+        }
+        if ("该成员已有进行中的退出投票".equals(message)) {
+            return ReasonCode.M4_DUPLICATE_OPERATION;
+        }
+        if ("目标成员不是项目活跃成员".equals(message)) {
+            return ReasonCode.M4_MEMBER_NOT_ACTIVE;
+        }
+        if ("不能对队长发起退出投票".equals(message)) {
+            return ReasonCode.STATUS_CONFLICT;
+        }
+        return ReasonCode.UNKNOWN_ERROR;
+    }
+
+    private ReasonCode mapSubmitVoteReason(Exception e) {
+        String message = e.getMessage();
+        if ("投票不存在".equals(message)) {
+            return ReasonCode.M4_RESOURCE_NOT_FOUND;
+        }
+        if ("投票已关闭".equals(message)) {
+            return ReasonCode.M4_VOTE_ALREADY_CLOSED;
+        }
+        if ("DUPLICATE_VOTE".equals(message)) {
+            return ReasonCode.M4_DUPLICATE_OPERATION;
+        }
+        if ("投票人不是项目活跃成员".equals(message)) {
+            return ReasonCode.M4_MEMBER_NOT_ACTIVE;
+        }
+        if ("目标成员不能参与自己的退出投票".equals(message)) {
+            return ReasonCode.STATUS_CONFLICT;
+        }
+        return ReasonCode.UNKNOWN_ERROR;
+    }
+
+    private ReasonCode mapCloseVoteReason(Exception e) {
+        String message = e.getMessage();
+        if ("投票不存在".equals(message)) {
+            return ReasonCode.M4_RESOURCE_NOT_FOUND;
+        }
+        if ("只有发起人可以关闭投票".equals(message)) {
+            return ReasonCode.M4_NOT_LEADER;
+        }
+        return ReasonCode.UNKNOWN_ERROR;
     }
 }

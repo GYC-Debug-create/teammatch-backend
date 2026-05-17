@@ -64,6 +64,17 @@ public enum ReasonCode {
     INVALID_REVIEW_ACTION("M5007", "无效的复核操作"),
     REVIEW_NOTE_TOO_LONG("M5008", "复核备注过长"),
 
+    // M4 组队/退出错误（M40xx）
+    M4_PROJECT_NOT_FOUND("M4001", "项目不存在"),
+    M4_NOT_LEADER("M4002", "无队长权限"),
+    M4_PROJECT_STATUS_INVALID("M4003", "项目状态不符合要求"),
+    M4_MEMBER_NOT_ACTIVE("M4004", "该用户不是项目的活跃成员"),
+    M4_RESOURCE_NOT_FOUND("M4005", "请求或投票不存在"),
+    M4_DUPLICATE_OPERATION("M4006", "重复操作"),
+    M4_TEAM_FULL("M4007", "团队成员已达上限"),
+    M4_VOTE_ALREADY_CLOSED("M4008", "投票已结束"),
+    M4_LEADER_CANNOT_EXIT("M4009", "队长不能退出，请先转让队长身份"),
+
     // 申诉恢复错误（M50xx）
     APPEAL_NOT_FOUND("M5009", "申诉记录不存在"),
     APPEAL_NOT_APPROVED("M5010", "申诉尚未通过审批"),
