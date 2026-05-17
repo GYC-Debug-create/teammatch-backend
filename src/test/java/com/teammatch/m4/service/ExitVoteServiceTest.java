@@ -10,6 +10,8 @@ import com.teammatch.m4.entity.TeamMember;
 import com.teammatch.m4.mapper.M4ExitVoteMapper;
 import com.teammatch.m4.mapper.M4ExitVoteRecordMapper;
 import com.teammatch.m4.service.impl.ExitVoteServiceImpl;
+import com.teammatch.mapper.CreditChangeMapper;
+import com.teammatch.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
 /**
@@ -45,6 +48,12 @@ class ExitVoteServiceTest {
 
     @Mock
     private ProjectService projectService;
+
+    @Mock
+    private CreditChangeMapper creditChangeMapper;
+
+    @Mock
+    private UserMapper userMapper;
 
     @InjectMocks
     private ExitVoteServiceImpl service;
@@ -99,6 +108,9 @@ class ExitVoteServiceTest {
     void selfExit_normalMember_success() {
         when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(regularMember);
         when(teamMemberService.updateById(any())).thenReturn(true);
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
 
         assertThatNoException().isThrownBy(() -> service.selfExit(PROJECT_ID, MEMBER_ID));
 
@@ -142,7 +154,7 @@ class ExitVoteServiceTest {
 
         assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("进行中");
+            .hasMessageContaining("进行中");
     }
 
     @Test
@@ -197,7 +209,7 @@ class ExitVoteServiceTest {
 
         assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("进行中");
+            .hasMessageContaining("进行中的退出投票");
     }
 
     // ================================================================ T-139
@@ -286,10 +298,12 @@ class ExitVoteServiceTest {
         openVote.setAgreeCount(2);
         openVote.setDisagreeCount(0);
         when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(openVote);
-        when(exitVoteMapper.updateById(any())).thenReturn(1);
+        when(exitVoteMapper.update(isNull(), any())).thenReturn(1); // lazyClose CAS
         List<TeamMember> targets = List.of(regularMember);
         when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(targets);
         when(teamMemberService.updateById(any())).thenReturn(true);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
 
         ExitVoteSubmitDTO dto = new ExitVoteSubmitDTO();
         dto.setVoterId(LEADER_ID);
@@ -300,7 +314,7 @@ class ExitVoteServiceTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("已关闭");
         // 自动关闭应更新投票和成员
-        verify(exitVoteMapper).updateById(argThat(v -> "closed".equals(v.getStatus()) && "pass".equals(v.getResult())));
+        verify(exitVoteMapper).update(isNull(), any());
         verify(teamMemberService).updateById(any());
     }
 
@@ -316,6 +330,8 @@ class ExitVoteServiceTest {
         List<TeamMember> targets = List.of(regularMember);
         when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(targets);
         when(teamMemberService.updateById(any())).thenReturn(true);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
 
         ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
 
@@ -362,5 +378,325 @@ class ExitVoteServiceTest {
         assertThatThrownBy(() -> service.closeVote(VOTE_ID, 999L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("发起人");
+    }
+
+    // ================================================================ T-136 T-146 信誉扣分验证
+    @Test
+    @DisplayName("T-146 selfExit: 正常退出后应写 credit_change -10 并更新 credit_score")
+    void selfExit_writesCreditChange() {
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(regularMember);
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
+
+        service.selfExit(PROJECT_ID, MEMBER_ID);
+
+        verify(creditChangeMapper).insert(argThat(cc ->
+                cc.getChangeValue() == -10
+                && "self_exit".equals(cc.getChangeType())
+                && cc.getEffective()
+                && MEMBER_ID.equals(cc.getUserId())
+        ));
+        verify(userMapper).updateCreditScore(MEMBER_ID, -10);
+    }
+
+    // ================================================================ T-137 initiateVote 更多分支
+    @Test
+    @DisplayName("T-137 initiateVote: 项目不存在应抛异常")
+    void initiateVote_nullProject_throws() {
+        when(projectService.getById(PROJECT_ID)).thenReturn(null);
+
+        ExitVoteCreateDTO dto = new ExitVoteCreateDTO();
+        dto.setInitiatorId(LEADER_ID);
+        dto.setTargetUserId(MEMBER_ID);
+
+        assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+            .hasMessageContaining("项目不存在");
+    }
+
+    @Test
+    @DisplayName("T-137 initiateVote: 发起人不是活跃成员（null）应抛异常")
+    void initiateVote_nullInitiator_throws() {
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(null); // 发起人非成员
+
+        ExitVoteCreateDTO dto = new ExitVoteCreateDTO();
+        dto.setInitiatorId(999L);
+        dto.setTargetUserId(MEMBER_ID);
+
+        assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("队长");
+    }
+
+    @Test
+    @DisplayName("T-137 initiateVote: 目标成员不存在应抛异常")
+    void initiateVote_nullTarget_throws() {
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(leaderMember)  // 发起人是队长
+                .thenReturn(null);         // 目标成员不存在
+
+        ExitVoteCreateDTO dto = new ExitVoteCreateDTO();
+        dto.setInitiatorId(LEADER_ID);
+        dto.setTargetUserId(999L);
+
+        assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("活跃成员");
+    }
+
+    @Test
+    @DisplayName("T-137 initiateVote: 对队长发起投票应抛异常")
+    void initiateVote_targetIsLeader_throws() {
+        TeamMember anotherLeader = new TeamMember();
+        anotherLeader.setId(3L);
+        anotherLeader.setProjectId(PROJECT_ID);
+        anotherLeader.setUserId(30L);
+        anotherLeader.setRole("leader");
+        anotherLeader.setStatus("active");
+
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(leaderMember)   // 发起人
+                .thenReturn(anotherLeader); // 目标是队长
+
+        ExitVoteCreateDTO dto = new ExitVoteCreateDTO();
+        dto.setInitiatorId(LEADER_ID);
+        dto.setTargetUserId(30L);
+
+        assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("队长");
+    }
+
+    @Test
+    @DisplayName("T-137 initiateVote: 非法 penaltyLevel 应抛 INVALID_PENALTY_LEVEL")
+    void initiateVote_invalidPenaltyLevel_throws() {
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(leaderMember)
+                .thenReturn(regularMember);
+        when(exitVoteMapper.selectCount(any())).thenReturn(0L);
+
+        ExitVoteCreateDTO dto = new ExitVoteCreateDTO();
+        dto.setInitiatorId(LEADER_ID);
+        dto.setTargetUserId(MEMBER_ID);
+        dto.setPenaltyLevel("minor"); // 非法值
+
+        assertThatThrownBy(() -> service.initiateVote(PROJECT_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("INVALID_PENALTY_LEVEL");
+    }
+
+    // ================================================================ T-138 getVoteDetail 分支
+    @Test
+    @DisplayName("T-138 getVoteDetail: 投票不存在应抛异常")
+    void getVoteDetail_notFound_throws() {
+        when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.getVoteDetail(VOTE_ID))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    @Test
+    @DisplayName("T-138 getVoteDetail: deadline 已过时返回自动关闭后的投票")
+    void getVoteDetail_deadlinePassedAutoClose() {
+        openVote.setDeadlineAt(LocalDateTime.now().minusHours(2));
+        openVote.setAgreeCount(2);
+        openVote.setDisagreeCount(1);
+        when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.update(isNull(), any())).thenReturn(1); // lazyClose CAS
+        when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(List.of(regularMember));
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
+
+        ExitVote result = service.getVoteDetail(VOTE_ID);
+
+        assertThat(result.getStatus()).isEqualTo("closed");
+        assertThat(result.getResult()).isEqualTo("pass");
+    }
+
+    // ================================================================ T-139 submitVote 更多分支
+    @Test
+    @DisplayName("T-139 submitVote: 投票不存在应抛异常")
+    void submitVote_notFound_throws() {
+        when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(null);
+
+        ExitVoteSubmitDTO dto = new ExitVoteSubmitDTO();
+        dto.setVoterId(LEADER_ID);
+        dto.setChoice("agree");
+
+        assertThatThrownBy(() -> service.submitVote(VOTE_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    @Test
+    @DisplayName("T-139 submitVote: 投反对票时 disagreeCount 加 1")
+    void submitVote_disagree_success() {
+        when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(openVote);
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(leaderMember);
+        when(exitVoteRecordMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
+        when(exitVoteRecordMapper.insert(any())).thenReturn(1);
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+
+        ExitVoteSubmitDTO dto = new ExitVoteSubmitDTO();
+        dto.setVoterId(LEADER_ID);
+        dto.setChoice("disagree");
+
+        assertThatNoException().isThrownBy(() -> service.submitVote(VOTE_ID, dto));
+
+        verify(exitVoteMapper).updateById(argThat(v -> v.getDisagreeCount() == 1 && v.getAgreeCount() == 0));
+    }
+
+    @Test
+    @DisplayName("T-139 submitVote: deadline 过后懒关闭结果为 reject 时应抛已关闭异常")
+    void submitVote_deadlinePassed_rejectAutoClose() {
+        openVote.setDeadlineAt(LocalDateTime.now().minusHours(1));
+        openVote.setAgreeCount(0);
+        openVote.setDisagreeCount(2); // 反对多
+        when(exitVoteMapper.selectById(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.update(isNull(), any())).thenReturn(1); // lazyClose CAS
+        // reject 时不更新 team_member
+
+        ExitVoteSubmitDTO dto = new ExitVoteSubmitDTO();
+        dto.setVoterId(LEADER_ID);
+        dto.setChoice("agree");
+
+        assertThatThrownBy(() -> service.submitVote(VOTE_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("已关闭");
+        verify(exitVoteMapper).update(isNull(), any());
+        verify(teamMemberService, never()).updateById(any());
+    }
+
+    // ================================================================ T-140/T-141 closeVote 更多分支
+    @Test
+    @DisplayName("T-140 closeVote: 投票不存在应抛异常")
+    void closeVote_notFound_throws() {
+        when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.closeVote(VOTE_ID, LEADER_ID))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("不存在");
+    }
+
+    @Test
+    @DisplayName("T-140 closeVote: pass 但目标成员已不在 active 列表时，不更新成员且不写信誉流水")
+    void closeVote_approved_noActiveMember() {
+        openVote.setAgreeCount(3);
+        openVote.setDisagreeCount(1);
+        when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+        when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(List.of()); // 空列表
+
+        ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
+
+        assertThat(result.getResult()).isEqualTo("pass");
+        verify(teamMemberService, never()).updateById(any()); // 没有成员可更新
+        verify(creditChangeMapper, never()).insert(any());    // 不产生额外扣分流水
+        verify(userMapper, never()).updateCreditScore(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("T-146 closeVote_approved: 通过时应写 credit_change -10 并更新 credit_score")
+    void closeVote_approved_writesCreditChange() {
+        openVote.setAgreeCount(3);
+        openVote.setDisagreeCount(1);
+        openVote.setPenaltyLevel("malicious"); // 恶意退出，扣 -10
+        when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+        when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(List.of(regularMember));
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
+
+        service.closeVote(VOTE_ID, LEADER_ID);
+
+        verify(creditChangeMapper).insert(argThat(cc ->
+                cc.getChangeValue() == -10
+                && "exit_vote".equals(cc.getChangeType())
+                && cc.getEffective()
+                && MEMBER_ID.equals(cc.getUserId())
+        ));
+        verify(userMapper).updateCreditScore(MEMBER_ID, -10);
+    }
+
+    @Test
+    @DisplayName("T-146 closeVote_approved: penaltyLevel=negotiated 时扣 -5")
+    void closeVote_approved_negotiated_deductsFive() {
+        openVote.setAgreeCount(3);
+        openVote.setDisagreeCount(1);
+        openVote.setPenaltyLevel("negotiated");
+        when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+        when(teamMemberService.list(any(LambdaQueryWrapper.class))).thenReturn(List.of(regularMember));
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
+
+        service.closeVote(VOTE_ID, LEADER_ID);
+
+        verify(creditChangeMapper).insert(argThat(cc -> cc.getChangeValue() == -5));
+        verify(userMapper).updateCreditScore(MEMBER_ID, -5);
+    }
+
+    @Test
+    @DisplayName("T-146 closeVote_rejected: 结果为 reject 时不应扣减信誉分")
+    void closeVote_rejected_noCreditChange() {
+        openVote.setAgreeCount(1);
+        openVote.setDisagreeCount(3); // 反对多 → reject
+        when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+
+        service.closeVote(VOTE_ID, LEADER_ID);
+
+        verify(creditChangeMapper, never()).insert(any());
+        verify(userMapper, never()).updateCreditScore(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("T-146 selfExit: 招募中项目退出，不写信誉流水")
+    void selfExit_recruiting_noCreditChange() {
+        Project recruitingProject = new Project();
+        recruitingProject.setId(PROJECT_ID);
+        recruitingProject.setStatus("recruiting");
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(regularMember);
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject);
+
+        assertThatNoException().isThrownBy(() -> service.selfExit(PROJECT_ID, MEMBER_ID));
+
+        verify(creditChangeMapper, never()).insert(any());
+        verify(userMapper, never()).updateCreditScore(any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("T-146 selfExit: 进行中项目退出，同事务关闭进行中的投票")
+    void selfExit_closesActiveExitVote() {
+        ExitVote activeVote = new ExitVote();
+        activeVote.setId(200L);
+        activeVote.setStatus("voting");
+
+        when(teamMemberService.getOne(any(LambdaQueryWrapper.class))).thenReturn(regularMember);
+        when(teamMemberService.updateById(any())).thenReturn(true);
+        when(projectService.getById(PROJECT_ID)).thenReturn(inProgressProject);
+        // selfExit 调用 this.list() 查询 active exit votes
+        when(exitVoteMapper.selectList(any())).thenReturn(List.of(activeVote));
+        when(exitVoteMapper.updateById(any())).thenReturn(1);
+        when(creditChangeMapper.insert(any())).thenReturn(1);
+        when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
+
+        assertThatNoException().isThrownBy(() -> service.selfExit(PROJECT_ID, MEMBER_ID));
+
+        // 验证 active vote 被关闭
+        verify(exitVoteMapper).updateById(argThat(v ->
+                "closed".equals(v.getStatus()) && v.getId().equals(200L)
+        ));
     }
 }
