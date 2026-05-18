@@ -10,7 +10,7 @@ import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.ProfileService;
-import io.jsonwebtoken.Jwts;
+import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -30,27 +30,8 @@ public class ProfileController {
     @Autowired
     private AuthService authService;
 
-    private static final String JWT_SECRET = "<REDACTED>";
-
-    /**
-     * 从 Token 中解析用户 ID
-     */
-    private Long getUserIdFromToken(String token) {
-        if (token.startsWith("Bearer ")) {
-            token = token.substring(7);
-        }
-        
-        try {
-            String userIdStr = Jwts.parser()
-                    .setSigningKey(JWT_SECRET)
-                    .parseClaimsJws(token)
-                    .getBody()
-                    .getSubject();
-            return Long.parseLong(userIdStr);
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid or expired token", e);
-        }
-    }
+    @Autowired
+    private AuthUtil authUtil;
 
     /**
      * D. 更新个人档案
@@ -59,7 +40,11 @@ public class ProfileController {
     @PutMapping("/update")
     public Result<Void> updateProfile(@RequestBody UpdateProfileRequest request,
                                       @RequestHeader("Authorization") String token) {
-        Long userId = getUserIdFromToken(token);
+        // 使用 AuthUtil 安全获取用户 ID
+        Long userId = authUtil.getCurrentUserId(token);
+        if (userId == null) {
+            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+        }
 
         User profile = new User();
         profile.setNickname(request.getNickname());
@@ -80,7 +65,12 @@ public class ProfileController {
     @PostMapping("/github/bind")
     public Result<Void> bindGithub(@RequestBody java.util.Map<String, String> params,
                                    @RequestHeader("Authorization") String token) {
-        Long userId = getUserIdFromToken(token);
+        // 使用 AuthUtil 安全获取用户 ID
+        Long userId = authUtil.getCurrentUserId(token);
+        if (userId == null) {
+            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+        }
+        
         String githubUsername = params.get("githubUsername");
         profileService.bindGithub(userId, githubUsername);
         return Result.success(null);
@@ -95,7 +85,12 @@ public class ProfileController {
     public Result<Void> updateGithub(@RequestBody java.util.Map<String, String> params,
                                      @RequestHeader("Authorization") String token) {
         try {
-            Long userId = getUserIdFromToken(token);
+            // 使用 AuthUtil 安全获取用户 ID
+            Long userId = authUtil.getCurrentUserId(token);
+            if (userId == null) {
+                return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+            }
+            
             String githubUsername = params.get("githubUsername");
             profileService.updateGithub(userId, githubUsername);
             return Result.success(null);
@@ -115,7 +110,12 @@ public class ProfileController {
     @PostMapping("/skills/add")
     public Result<Void> addSkill(@RequestBody java.util.Map<String, Long> params,
                                  @RequestHeader("Authorization") String token) {
-        Long userId = getUserIdFromToken(token);
+        // 使用 AuthUtil 安全获取用户 ID
+        Long userId = authUtil.getCurrentUserId(token);
+        if (userId == null) {
+            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+        }
+        
         Long skillTagId = params.get("skillTagId");
         profileService.addSkill(userId, skillTagId);
         return Result.success(null);
@@ -130,7 +130,12 @@ public class ProfileController {
     @PutMapping("/skills")
     public Result<Void> updateUserSkills(@Valid @RequestBody UpdateUserSkillsRequest request,
                                          @RequestHeader("Authorization") String token) {
-        Long userId = getUserIdFromToken(token);
+        // 使用 AuthUtil 安全获取用户 ID
+        Long userId = authUtil.getCurrentUserId(token);
+        if (userId == null) {
+            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+        }
+        
         try {
             profileService.updateUserSkills(userId, request.getSkillTagIds());
             return Result.success(null);

@@ -11,6 +11,7 @@ import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.ProfileService;
+import com.teammatch.util.AuthUtil;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,9 @@ class ProfileControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private AuthUtil authUtil;
+
     @InjectMocks
     private ProfileController profileController;
 
@@ -60,6 +64,10 @@ class ProfileControllerTest {
                 .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
                 .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
                 .compact();
+        
+        // Mock AuthUtil 的行为，返回测试用户 ID（使用 lenient 避免 UnnecessaryStubbingException）
+        lenient().when(authUtil.getCurrentUserId(anyString())).thenReturn(TEST_USER_ID);
+        lenient().when(authUtil.isCurrentUserAdmin(anyString())).thenReturn(false);
     }
 
     @Test
