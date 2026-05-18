@@ -11,6 +11,7 @@ import com.teammatch.m4.entity.ExitVoteRecord;
 import com.teammatch.m4.entity.TeamMember;
 import com.teammatch.m4.mapper.M4ExitVoteMapper;
 import com.teammatch.m4.mapper.M4ExitVoteRecordMapper;
+import com.teammatch.m4.mapper.M4TeamMemberMapper;
 import com.teammatch.m4.entity.Project;
 import com.teammatch.m4.service.ExitVoteService;
 import com.teammatch.m4.service.ProjectService;
@@ -36,12 +37,14 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
     private final ProjectService projectService;
     private final CreditChangeMapper creditChangeMapper;
     private final UserMapper userMapper;
+    private final M4TeamMemberMapper teamMemberMapper;
 
     // ------------------------------------------------------------------ T-136
     /**
      * 成员主动退出（V2.1）：
      * - recruiting 阶段：仅更改成员状态，不写信誉流水
-     * - in_progress 阶段：更改成员状态，同事务关闭针对该用户的进行中投票（result=null），再扣 -10
+     * - in_progress 阶段：CAS 关闭投票 → CAS 更新成员 → 写扣分流水
+     * 统一锁顺序 exit_vote → team_member，与 closeVote/lazyClose 一致，避免死锁。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -57,29 +60,52 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
         if (project == null) {
             throw new RuntimeException("项目不存在");
         }
-        member.setStatus("exited");
-        member.setExitMode("self_exit");
-        member.setLeftAt(LocalDateTime.now());
-        member.setUpdatedAt(LocalDateTime.now());
-        teamMemberService.updateById(member);
 
+        LocalDateTime now = LocalDateTime.now();
         if ("in_progress".equals(project.getStatus())) {
-            // 同事务关闭针对该用户进行中的投票，result 保持 null（V2.1 §88），防止后续 closeVote 二次扣分
+            // 第一步：CAS 关闭该用户进行中的投票（先锁 exit_vote，与 closeVote/lazyClose 统一顺序）
             List<ExitVote> activeVotes = this.list(new LambdaQueryWrapper<ExitVote>()
                     .eq(ExitVote::getProjectId, projectId)
                     .eq(ExitVote::getTargetUserId, userId)
                     .eq(ExitVote::getStatus, "voting"));
             for (ExitVote v : activeVotes) {
-                v.setStatus("closed");
-                v.setClosedAt(LocalDateTime.now());
-                v.setUpdatedAt(LocalDateTime.now());
-                this.updateById(v);
+                baseMapper.update(null, new UpdateWrapper<ExitVote>()
+                        .eq("id", v.getId())
+                        .eq("status", "voting")
+                        .set("status", "closed")
+                        .set("closed_at", now)
+                        .set("updated_at", now));
+                // rows == 0 表示 closeVote/lazyClose 已抢占，跳过即可
             }
-            // 正式惩罚性退出，扣 -10
+
+            // 第二步：CAS 更新成员状态（再锁 team_member）
+            int memberRows = teamMemberMapper.update(null, new UpdateWrapper<TeamMember>()
+                    .eq("id", member.getId())
+                    .eq("status", "active")
+                    .set("status", "exited")
+                    .set("exit_mode", "self_exit")
+                    .set("left_at", now)
+                    .set("updated_at", now));
+            if (memberRows != 1) {
+                throw new RuntimeException("TEAM_VOTE_CONFLICT");
+            }
+
+            // 第三步：CAS 成功才写扣分
             writeCreditChange(userId, projectId, "self_exit", "team_member", member.getId(),
                     "主动退出项目，信誉分扣 10 分", -10);
+        } else {
+            // recruiting 阶段：轻量退出，不写信誉流水
+            int memberRows = teamMemberMapper.update(null, new UpdateWrapper<TeamMember>()
+                    .eq("id", member.getId())
+                    .eq("status", "active")
+                    .set("status", "exited")
+                    .set("exit_mode", "self_exit")
+                    .set("left_at", now)
+                    .set("updated_at", now));
+            if (memberRows != 1) {
+                throw new RuntimeException("TEAM_VOTE_CONFLICT");
+            }
         }
-        // recruiting 阶段：轻量退出，不写信誉流水
     }
 
     // ------------------------------------------------------------------ T-137
@@ -123,9 +149,9 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
         if (votingCount > 0) {
             throw new RuntimeException("该成员已有进行中的退出投票");
         }
-        // 校验 penaltyLevel 合法性（V2.1 仅允许 negotiated / malicious）
+        // 校验 penaltyLevel 合法性（V2.1 仅允许 negotiated / malicious，缺失或非法均拒绝）
         String penaltyLevel = dto.getPenaltyLevel();
-        if (penaltyLevel != null && !"negotiated".equals(penaltyLevel) && !"malicious".equals(penaltyLevel)) {
+        if (!"negotiated".equals(penaltyLevel) && !"malicious".equals(penaltyLevel)) {
             throw new RuntimeException("INVALID_PENALTY_LEVEL");
         }
         // 快照可投票人数（不含目标成员）
@@ -139,7 +165,7 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
         vote.setInitiatorId(dto.getInitiatorId());
         vote.setTargetUserId(dto.getTargetUserId());
         vote.setReason(dto.getReason());
-        vote.setPenaltyLevel(penaltyLevel != null ? penaltyLevel : "negotiated");
+        vote.setPenaltyLevel(penaltyLevel);
         vote.setStatus("voting");
         vote.setAgreeCount(0);
         vote.setDisagreeCount(0);
@@ -256,28 +282,27 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
     }
 
     /**
-     * pass 时的副作用：踢出成员 + 按 penaltyLevel 写信誉流水（V2.1）：
-     * negotiated=-5，malicious=-10。
+     * pass 时的副作用：CAS 踢出成员 + 按 penaltyLevel 写信誉流水。
+     * negotiated=-5，malicious=-10。CAS 失败（memberRows==0）表示 selfExit 已抢占，跳过扣分。
      */
     private void executePassedExitSideEffects(ExitVote vote) {
-        List<TeamMember> members = teamMemberService.list(new LambdaQueryWrapper<TeamMember>()
-                .eq(TeamMember::getProjectId, vote.getProjectId())
-                .eq(TeamMember::getUserId, vote.getTargetUserId())
-                .eq(TeamMember::getStatus, "active"));
-        if (!members.isEmpty()) {
-            TeamMember m = members.get(0);
-            m.setStatus("exited");
-            m.setExitMode("exit_vote");
-            m.setLeftAt(LocalDateTime.now());
-            m.setUpdatedAt(LocalDateTime.now());
-            teamMemberService.updateById(m);
-            int changeValue = "malicious".equals(vote.getPenaltyLevel()) ? -10 : -5;
-            writeCreditChange(vote.getTargetUserId(), vote.getProjectId(),
-                    "exit_vote", "exit_vote", vote.getId(),
-                    "被投票退出项目，信誉分扣 " + Math.abs(changeValue) + " 分",
-                    changeValue);
+        LocalDateTime now = LocalDateTime.now();
+        int memberRows = teamMemberMapper.update(null, new UpdateWrapper<TeamMember>()
+                .eq("project_id", vote.getProjectId())
+                .eq("user_id", vote.getTargetUserId())
+                .eq("status", "active")
+                .set("status", "exited")
+                .set("exit_mode", "exit_vote")
+                .set("left_at", now)
+                .set("updated_at", now));
+        if (memberRows == 0) {
+            return; // selfExit 已抢占成员状态，不产生额外扣分流水
         }
-        // 目标成员无 active 记录（已 selfExit），跳过 exit_vote 扣分，不产生额外流水
+        int changeValue = "malicious".equals(vote.getPenaltyLevel()) ? -10 : -5;
+        writeCreditChange(vote.getTargetUserId(), vote.getProjectId(),
+                "exit_vote", "exit_vote", vote.getId(),
+                "被投票退出项目，信誉分扣 " + Math.abs(changeValue) + " 分",
+                changeValue);
     }
 
     /**

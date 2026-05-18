@@ -1,5 +1,15 @@
 # IMPLEMENT_LOG
 
+## 2026-05-18 M4 退出扣分并发边界补测
+
+**问题：** `selfExit` 已通过 `memberRows != 1` 拦截 team_member CAS 异常结果，但原单测只覆盖 `memberRows == 0` 的并发抢占场景，未显式覆盖异常多行边界。
+
+**修复：** `ExitVoteServiceTest` 补充 `memberRows > 1` 分支，断言返回 `TEAM_VOTE_CONFLICT`，且不写 `credit_change`、不更新 `user.credit_score`。
+
+**测试证据：** `mvn -Dtest=ExitVoteServiceTest test`，38 测试全部通过。
+
+---
+
 ## 2026-05-15 M5 Service 层收口风险修复
 
 本轮修复了 M5-1 到 M5-7 Service 层的 2 个 P0 阻塞问题和 1 个 P1 问题。
