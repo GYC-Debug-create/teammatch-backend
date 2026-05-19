@@ -65,9 +65,9 @@ class ProfileControllerTest {
                 .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
                 .compact();
         
-        // Mock AuthUtil 的行为，返回测试用户 ID（使用 lenient 避免 UnnecessaryStubbingException）
-        lenient().when(authUtil.getCurrentUserId(anyString())).thenReturn(TEST_USER_ID);
-        lenient().when(authUtil.isCurrentUserAdmin(anyString())).thenReturn(false);
+        // Mock AuthUtil 的行为（使用 lenient 避免 UnnecessaryStubbingException）
+        lenient().when(authUtil.requireUserId(anyString())).thenReturn(TEST_USER_ID);
+        lenient().doNothing().when(authUtil).requireAdmin(anyString());
     }
 
     @Test
@@ -225,7 +225,7 @@ class ProfileControllerTest {
         request.setName("Spring Boot");
         request.setCategory("framework");
 
-        when(authService.isAdmin(validToken)).thenReturn(true);
+        lenient().doNothing().when(authUtil).requireAdmin(anyString());
         doNothing().when(profileService).addSkillTag(any(SkillTag.class));
 
         Result<Void> result = profileController.addSkillTag(request, validToken);
@@ -240,7 +240,9 @@ class ProfileControllerTest {
         AddSkillTagRequest request = new AddSkillTagRequest();
         request.setName("Spring Boot");
 
-        when(authService.isAdmin(validToken)).thenReturn(false);
+        // Mock requireAdmin 抛出 AuthorizationException
+        doThrow(new com.teammatch.exception.AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+            .when(authUtil).requireAdmin(anyString());
 
         Result<Void> result = profileController.addSkillTag(request, validToken);
 
@@ -255,7 +257,7 @@ class ProfileControllerTest {
         request.setName("Java");
         request.setCategory("language");
 
-        when(authService.isAdmin(validToken)).thenReturn(true);
+        lenient().doNothing().when(authUtil).requireAdmin(anyString());
         doThrow(new DuplicateDataException(ReasonCode.SKILL_TAG_ALREADY_EXISTS))
                 .when(profileService).addSkillTag(any(SkillTag.class));
 
@@ -263,5 +265,21 @@ class ProfileControllerTest {
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getCode()).isEqualTo(ReasonCode.SKILL_TAG_ALREADY_EXISTS.getCode());
+    }
+
+    @Test
+    @DisplayName("updateProfile - 无效 token 应返回 M3000 错误")
+    void updateProfile_invalidToken_shouldReturnM3000() {
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setNickname("NewNickname");
+
+        // Mock requireUserId 抛出 AuthenticationException(M3000)
+        doThrow(new com.teammatch.exception.AuthenticationException(ReasonCode.UNAUTHORIZED))
+            .when(authUtil).requireUserId(anyString());
+
+        Result<Void> result = profileController.updateProfile(request, "invalid_token");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.UNAUTHORIZED.getCode());
     }
 }

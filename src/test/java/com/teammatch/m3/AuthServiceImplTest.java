@@ -603,17 +603,17 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("getUserIdFromToken - 无效 Token 应抛出异常")
+    @DisplayName("getUserIdFromToken - 无效 Token 应抛出 AuthenticationException")
     void getUserIdFromToken_invalidToken_shouldThrowException() {
         String invalidToken = "<REDACTED>";
 
         assertThatThrownBy(() -> authService.getUserIdFromToken(invalidToken))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Invalid or expired token");
+                .isInstanceOf(com.teammatch.exception.AuthenticationException.class)
+                .hasFieldOrPropertyWithValue("reasonCode", ReasonCode.UNAUTHORIZED);
     }
 
     @Test
-    @DisplayName("getUserIdFromToken - 过期 Token 应抛出异常")
+    @DisplayName("getUserIdFromToken - 过期 Token 应抛出 AuthenticationException")
     void getUserIdFromToken_expiredToken_shouldThrowException() {
         // 生成一个已过期的 Token
         String expiredToken = Jwts.builder()
@@ -624,8 +624,8 @@ class AuthServiceImplTest {
                 .compact();
 
         assertThatThrownBy(() -> authService.getUserIdFromToken(expiredToken))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Invalid or expired token");
+                .isInstanceOf(com.teammatch.exception.AuthenticationException.class)
+                .hasFieldOrPropertyWithValue("reasonCode", ReasonCode.UNAUTHORIZED);
     }
 
     // ==================== 辅助方法 ====================
