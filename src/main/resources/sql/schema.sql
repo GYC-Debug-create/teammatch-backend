@@ -259,7 +259,7 @@ CREATE TABLE IF NOT EXISTS `credit_change` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
   `user_id` BIGINT NOT NULL COMMENT 'User whose credit changes',
   `project_id` BIGINT NULL COMMENT 'Related project id when applicable',
-  `change_type` VARCHAR(32) NOT NULL COMMENT 'Type: evaluation/exit_vote/self_exit/penalty/appeal_restore',
+  `change_type` VARCHAR(32) NOT NULL COMMENT 'Type: evaluation/exit_vote/self_exit/penalty/penalty_restore/appeal_restore',
   `change_value` INT NOT NULL COMMENT 'Delta value, positive or negative',
   `effective` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Effective flag: 1 effective, 0 suspended or not counted',
   `source_type` VARCHAR(32) NOT NULL COMMENT 'Source type: evaluation/exit_vote/team_member/penalty/appeal',

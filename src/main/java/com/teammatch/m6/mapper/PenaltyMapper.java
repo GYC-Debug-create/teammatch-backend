@@ -50,4 +50,17 @@ public interface PenaltyMapper extends BaseMapper<Penalty> {
      */
     @Select("SELECT * FROM penalty WHERE type = #{type} ORDER BY created_at DESC")
     List<Penalty> selectByType(String type);
+
+    /**
+     * 统计用户当前仍生效的 function_limit 处罚条数。
+     * <p>
+     * 用于撤销/申诉恢复时判断 user.status：V2.1 §6.7 function_limit 分支，
+     * 仅当计数为 0 时才可将用户解封为 active。
+     *
+     * @param userId 被处罚用户 ID
+     * @return 生效中的 function_limit 条数
+     */
+    @Select("SELECT COUNT(*) FROM penalty WHERE user_id = #{userId} " +
+            "AND type = 'function_limit' AND status = 'active'")
+    int countActiveFunctionLimitByUserId(Long userId);
 }

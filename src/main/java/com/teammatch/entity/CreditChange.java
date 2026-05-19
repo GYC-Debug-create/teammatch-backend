@@ -20,7 +20,7 @@ public class CreditChange {
     /** 关联的项目ID，如果适用 */
     private Long projectId;
 
-    /** 变化类型：evaluation 互评，exit_vote 投票退出，self_exit 自主退出，penalty 处罚，appeal_restore 申诉恢复 */
+    /** 变化类型：evaluation 互评，exit_vote 投票退出，self_exit 自主退出，penalty 处罚，penalty_restore 处罚扣分撤销 , appeal_restore 申诉恢复 */
     private String changeType;
 
     /** 变化值，正数表示加分，负数表示扣分 */
