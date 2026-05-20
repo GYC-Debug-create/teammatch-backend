@@ -16,13 +16,16 @@ import com.teammatch.exception.NotFoundException;
 import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.service.AuthService;
+import com.teammatch.service.EmailService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * M3 认证服务实现类
  */
+@Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
 
@@ -39,10 +43,16 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private EmailService emailService;
+
     private static final String CODE_PREFIX = "email:code:";
+    private static final String SEND_LIMIT_PREFIX = "email:send:";
     private static final String TOKEN_PREFIX = "auth:token:";
     private static final String JWT_SECRET = "<REDACTED>";
     private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
+    // 使用 SecureRandom 生成更安全的验证码
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Override
     public User mockLogin(LoginRequest request) {
@@ -107,12 +117,44 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void sendEmailCode(SendEmailCodeRequest request, String token) {
+        // 1. 校验邮箱格式
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            throw new ValidationException(ReasonCode.INVALID_EMAIL, "邮箱不能为空");
+        }
+        // 简单邮箱格式校验
+        if (!request.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new ValidationException(ReasonCode.INVALID_EMAIL, "邮箱格式不正确");
+        }
+        
         Long userId = getUserIdFromToken(token);
-        String code = String.format("%06d", new Random().nextInt(1000000));
-        String key = CODE_PREFIX + userId;
-        redisTemplate.opsForValue().set(key, code, 10, TimeUnit.MINUTES);
-        // 实际项目中应调用邮件发送服务
-        System.out.println("Email code for user " + userId + " (" + request.getEmail() + "): " + code);
+        
+        // 2. 60秒防刷检查
+        String sendLimitKey = SEND_LIMIT_PREFIX + userId;
+        Boolean exists = redisTemplate.hasKey(sendLimitKey);
+        if (Boolean.TRUE.equals(exists)) {
+            throw new ValidationException(ReasonCode.SEND_CODE_TOO_FREQUENT);
+        }
+        
+        // 3. 生成验证码（使用 SecureRandom）
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+        String codeKey = CODE_PREFIX + userId;
+        
+        // 4. 先发送邮件，成功后再设置 Redis
+        try {
+            emailService.sendVerificationCode(request.getEmail(), code);
+            
+            // 邮件发送成功后，设置验证码和防刷标记
+            redisTemplate.opsForValue().set(codeKey, code, 10, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(sendLimitKey, "1", 60, TimeUnit.SECONDS);
+            
+            log.info("邮箱验证码发送成功: userId={}, email={}", userId, request.getEmail());
+        } catch (Exception e) {
+            log.error("邮箱验证码发送失败: userId={}, email={}, error={}", userId, request.getEmail(), e.getMessage());
+            // 发送失败时，确保不留下脏数据
+            redisTemplate.delete(codeKey);
+            redisTemplate.delete(sendLimitKey);
+            throw new RuntimeException(ReasonCode.EMAIL_SEND_FAILED.getMessage(), e);
+        }
     }
 
     @Override

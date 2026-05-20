@@ -102,8 +102,20 @@ public class AuthController {
     @PostMapping("/email/send")
     public Result<Void> sendEmailCode(@RequestBody SendEmailCodeRequest request, 
                                 @RequestHeader("Authorization") String token) {
-        authService.sendEmailCode(request, token);
-        return Result.success(null);
+        try {
+            authService.sendEmailCode(request, token);
+            return Result.success(null);
+        } catch (ValidationException e) {
+            // 参数校验异常（邮箱格式错误、发送过于频繁等）
+            return Result.fail(e.getReasonCode());
+        } catch (RuntimeException e) {
+            // 邮件发送失败
+            if (e.getMessage() != null && e.getMessage().contains(ReasonCode.EMAIL_SEND_FAILED.getMessage())) {
+                return Result.fail(ReasonCode.EMAIL_SEND_FAILED);
+            }
+            // 其他未知异常
+            return Result.fail(ReasonCode.UNKNOWN_ERROR);
+        }
     }
 
     /**

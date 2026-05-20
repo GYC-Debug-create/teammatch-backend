@@ -24,6 +24,23 @@ spring:
           max-idle: 8
           min-idle: 0
           max-wait: -1ms
+  
+  # 邮件配置
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 # MyBatis-Plus 配置
 mybatis-plus:

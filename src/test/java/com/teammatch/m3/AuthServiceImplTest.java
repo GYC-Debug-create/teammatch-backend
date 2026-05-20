@@ -15,6 +15,7 @@ import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
 import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.UserMapper;
+import com.teammatch.service.EmailService;
 import com.teammatch.service.impl.AuthServiceImpl;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -57,6 +58,9 @@ class AuthServiceImplTest {
 
     @Mock
     private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -218,12 +222,76 @@ class AuthServiceImplTest {
     // ==================== 辅助方法与其他覆盖 ====================
 
     @Test
-    @DisplayName("发送邮箱验证码 - 应成功存入 Redis")
+    @DisplayName("发送邮箱验证码 - 应成功存入 Redis 并调用邮件服务")
     void sendEmailCode_shouldSuccess() {
         SendEmailCodeRequest request = new SendEmailCodeRequest();
         request.setEmail("test@example.com");
+        
+        // Mock Redis hasKey 返回 false（允许发送）
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+        
         authService.sendEmailCode(request, "Bearer " + validToken);
-        verify(valueOperations).set(anyString(), anyString(), anyLong(), any());
+        
+        // 验证邮件服务被调用
+        verify(emailService).sendVerificationCode(eq("test@example.com"), anyString());
+        // 验证 Redis 设置了验证码和防刷标记
+        verify(valueOperations, times(2)).set(anyString(), anyString(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("发送邮箱验证码 - 60秒内重复发送应抛出异常")
+    void sendEmailCode_tooFrequent_shouldThrowException() {
+        SendEmailCodeRequest request = new SendEmailCodeRequest();
+        request.setEmail("test@example.com");
+        
+        // Mock Redis hasKey 返回 true（60秒内已发送过）
+        when(redisTemplate.hasKey(anyString())).thenReturn(true);
+        
+        assertThatThrownBy(() -> authService.sendEmailCode(request, "Bearer " + validToken))
+                .isInstanceOf(ValidationException.class)
+                .hasFieldOrPropertyWithValue("reasonCode", ReasonCode.SEND_CODE_TOO_FREQUENT);
+    }
+
+    @Test
+    @DisplayName("发送邮箱验证码 - 邮箱为空应抛出异常")
+    void sendEmailCode_emptyEmail_shouldThrowException() {
+        SendEmailCodeRequest request = new SendEmailCodeRequest();
+        request.setEmail("");
+        
+        assertThatThrownBy(() -> authService.sendEmailCode(request, "Bearer " + validToken))
+                .isInstanceOf(ValidationException.class)
+                .hasFieldOrPropertyWithValue("reasonCode", ReasonCode.INVALID_EMAIL);
+    }
+
+    @Test
+    @DisplayName("发送邮箱验证码 - 邮箱格式错误应抛出异常")
+    void sendEmailCode_invalidEmailFormat_shouldThrowException() {
+        SendEmailCodeRequest request = new SendEmailCodeRequest();
+        request.setEmail("invalid-email");
+        
+        assertThatThrownBy(() -> authService.sendEmailCode(request, "Bearer " + validToken))
+                .isInstanceOf(ValidationException.class)
+                .hasFieldOrPropertyWithValue("reasonCode", ReasonCode.INVALID_EMAIL);
+    }
+
+    @Test
+    @DisplayName("发送邮箱验证码 - 邮件服务失败应抛出异常并清理 Redis")
+    void sendEmailCode_emailServiceFailed_shouldThrowExceptionAndCleanRedis() {
+        SendEmailCodeRequest request = new SendEmailCodeRequest();
+        request.setEmail("test@example.com");
+        
+        // Mock Redis hasKey 返回 false（允许发送）
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+        // Mock 邮件服务抛出异常
+        doThrow(new RuntimeException("SMTP connection failed"))
+            .when(emailService).sendVerificationCode(anyString(), anyString());
+        
+        assertThatThrownBy(() -> authService.sendEmailCode(request, "Bearer " + validToken))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining(ReasonCode.EMAIL_SEND_FAILED.getMessage());
+        
+        // 验证 Redis 中的脏数据被清理（codeKey 和 sendLimitKey）
+        verify(redisTemplate, times(2)).delete(anyString());
     }
 
     @Test
