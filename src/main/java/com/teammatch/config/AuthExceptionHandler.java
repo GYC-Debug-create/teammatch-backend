@@ -2,23 +2,27 @@ package com.teammatch.config;
 
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
+import com.teammatch.exception.DuplicateDataException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * 认证相关全局异常处理器
  * 
- * 【实习要点】统一处理认证异常，避免各模块重复编写 try-catch
- * 
  * 处理的异常类型：
  * - MalformedJwtException: Token 格式错误
  * - ExpiredJwtException: Token 已过期
  * - SignatureException: Token 签名验证失败
- * - RuntimeException: AuthService 抛出的认证相关异常
+ * - AuthenticationException: 认证失败（M3000）
+ * - AuthorizationException: 权限不足（M3009）
  */
+@Slf4j
 @RestControllerAdvice
 public class AuthExceptionHandler {
 
@@ -26,44 +30,47 @@ public class AuthExceptionHandler {
      * 处理 JWT 相关异常
      * 
      * @param e JWT 异常
-     * @return 统一的未授权响应
+     * @return M3000 UNAUTHORIZED
      */
     @ExceptionHandler({MalformedJwtException.class, ExpiredJwtException.class, SignatureException.class})
     public Result<Void> handleJwtException(Exception e) {
+        log.warn("JWT Token 解析失败: {}", e.getMessage());
         return Result.fail(ReasonCode.UNAUTHORIZED);
     }
 
     /**
-     * 处理认证相关的 RuntimeException
-     * 注意：只处理来自 AuthService 的认证异常，避免误捕其他业务异常
+     * 处理认证失败异常（M3000）
      * 
-     * @param e 运行时异常
-     * @return 统一的未授权响应或未知错误
+     * @param e 认证异常
+     * @return M3000 UNAUTHORIZED
      */
-    @ExceptionHandler(RuntimeException.class)
-    public Result<Void> handleRuntimeException(RuntimeException e) {
-        // 检查是否是认证相关的异常
-        if (isAuthRelatedException(e)) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
-        // 其他 RuntimeException 返回未知错误
-        return Result.fail(ReasonCode.UNKNOWN_ERROR);
+    @ExceptionHandler(AuthenticationException.class)
+    public Result<Void> handleAuthenticationException(AuthenticationException e) {
+        log.warn("认证失败: {}", e.getReasonCode());
+        return Result.fail(e.getReasonCode());
     }
 
     /**
-     * 判断异常是否与认证相关
+     * 处理权限不足异常（M3009）
      * 
-     * @param e 异常对象
-     * @return true-认证相关异常，false-其他异常
+     * @param e 权限异常
+     * @return M3009 ADMIN_REQUIRED
      */
-    private boolean isAuthRelatedException(RuntimeException e) {
-        String message = e.getMessage();
-        if (message == null) {
-            return false;
-        }
-        // 检查异常消息是否包含认证相关的关键词
-        return message.contains("Invalid or expired token") ||
-               message.contains("token") ||
-               message.contains("Token");
+    @ExceptionHandler(AuthorizationException.class)
+    public Result<Void> handleAuthorizationException(AuthorizationException e) {
+        log.warn("权限不足: {}", e.getReasonCode());
+        return Result.fail(e.getReasonCode());
+    }
+
+    /**
+     * 处理数据重复异常
+     * 
+     * @param e 数据重复异常
+     * @return 对应的错误码
+     */
+    @ExceptionHandler(DuplicateDataException.class)
+    public Result<Void> handleDuplicateDataException(DuplicateDataException e) {
+        log.warn("数据重复: {}", e.getReasonCode());
+        return Result.fail(e.getReasonCode());
     }
 }

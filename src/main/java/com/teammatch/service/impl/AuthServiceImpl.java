@@ -346,7 +346,7 @@ public class AuthServiceImpl implements AuthService {
                     .getSubject();
             return Long.parseLong(userIdStr);
         } catch (Exception e) {
-            throw new RuntimeException("Invalid or expired token", e);
+            throw new AuthenticationException(ReasonCode.UNAUTHORIZED);
         }
     }
 
@@ -366,16 +366,4 @@ public class AuthServiceImpl implements AuthService {
         
         return token;
     }
-
-    /**
-     * 【实习要点4】检查并更新正式档案状态
-     * 在以下场景调用：
-     * 1. 邮箱验证成功后
-     * 2. 更新个人档案后
-     * 
-     * 正式档案完成条件：
-     * - 邮箱已验证
-     * - 昵称不为空
-     * - 学校不为空
-     */
 }

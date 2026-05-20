@@ -30,6 +30,7 @@ public class ProfileController {
     @Autowired
     private AuthService authService;
 
+    
     @Autowired
     private AuthUtil authUtil;
 
@@ -40,22 +41,23 @@ public class ProfileController {
     @PutMapping("/update")
     public Result<Void> updateProfile(@RequestBody UpdateProfileRequest request,
                                       @RequestHeader("Authorization") String token) {
-        // 使用 AuthUtil 安全获取用户 ID
-        Long userId = authUtil.getCurrentUserId(token);
-        if (userId == null) {
-            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
+        try {
+            // 必须登录，失败会抛出 AuthenticationException(M3000)
+            Long userId = authUtil.requireUserId(token);
+
+            User profile = new User();
+            profile.setNickname(request.getNickname());
+            profile.setAvatarUrl(request.getAvatarUrl());
+            profile.setSchool(request.getSchool());
+            profile.setMajor(request.getMajor());
+            profile.setGrade(request.getGrade());
+            profile.setBio(request.getBio());
+
+            profileService.updateProfile(userId, profile);
+            return Result.success(null);
+        } catch (com.teammatch.exception.AuthenticationException e) {
+            return Result.fail(e.getReasonCode());
         }
-
-        User profile = new User();
-        profile.setNickname(request.getNickname());
-        profile.setAvatarUrl(request.getAvatarUrl());
-        profile.setSchool(request.getSchool());
-        profile.setMajor(request.getMajor());
-        profile.setGrade(request.getGrade());
-        profile.setBio(request.getBio());
-
-        profileService.updateProfile(userId, profile);
-        return Result.success(null);
     }
 
     /**
@@ -65,11 +67,8 @@ public class ProfileController {
     @PostMapping("/github/bind")
     public Result<Void> bindGithub(@RequestBody java.util.Map<String, String> params,
                                    @RequestHeader("Authorization") String token) {
-        // 使用 AuthUtil 安全获取用户 ID
-        Long userId = authUtil.getCurrentUserId(token);
-        if (userId == null) {
-            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
-        }
+        // 必须登录
+        Long userId = authUtil.requireUserId(token);
         
         String githubUsername = params.get("githubUsername");
         profileService.bindGithub(userId, githubUsername);
@@ -85,11 +84,8 @@ public class ProfileController {
     public Result<Void> updateGithub(@RequestBody java.util.Map<String, String> params,
                                      @RequestHeader("Authorization") String token) {
         try {
-            // 使用 AuthUtil 安全获取用户 ID
-            Long userId = authUtil.getCurrentUserId(token);
-            if (userId == null) {
-                return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
-            }
+            // 必须登录
+            Long userId = authUtil.requireUserId(token);
             
             String githubUsername = params.get("githubUsername");
             profileService.updateGithub(userId, githubUsername);
@@ -110,11 +106,8 @@ public class ProfileController {
     @PostMapping("/skills/add")
     public Result<Void> addSkill(@RequestBody java.util.Map<String, Long> params,
                                  @RequestHeader("Authorization") String token) {
-        // 使用 AuthUtil 安全获取用户 ID
-        Long userId = authUtil.getCurrentUserId(token);
-        if (userId == null) {
-            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
-        }
+        // 必须登录
+        Long userId = authUtil.requireUserId(token);
         
         Long skillTagId = params.get("skillTagId");
         profileService.addSkill(userId, skillTagId);
@@ -130,11 +123,8 @@ public class ProfileController {
     @PutMapping("/skills")
     public Result<Void> updateUserSkills(@Valid @RequestBody UpdateUserSkillsRequest request,
                                          @RequestHeader("Authorization") String token) {
-        // 使用 AuthUtil 安全获取用户 ID
-        Long userId = authUtil.getCurrentUserId(token);
-        if (userId == null) {
-            return Result.fail(com.teammatch.common.ReasonCode.UNAUTHORIZED);
-        }
+        // 必须登录
+        Long userId = authUtil.requireUserId(token);
         
         try {
             profileService.updateUserSkills(userId, request.getSkillTagIds());
@@ -167,9 +157,13 @@ public class ProfileController {
     @PostMapping("/skills/tag/add")
     public Result<Void> addSkillTag(@RequestBody AddSkillTagRequest request,
                                     @RequestHeader("Authorization") String token) {
-        // 管理员权限校验
-        if (!authService.isAdmin(token)) {
-            return Result.fail(com.teammatch.common.ReasonCode.ADMIN_REQUIRED);
+        try {
+            // 必须是管理员，失败会抛出 AuthenticationException(M3000) 或 AuthorizationException(M3009)
+            authUtil.requireAdmin(token);
+        } catch (com.teammatch.exception.AuthenticationException e) {
+            return Result.fail(e.getReasonCode());
+        } catch (com.teammatch.exception.AuthorizationException e) {
+            return Result.fail(e.getReasonCode());
         }
         
         SkillTag skillTag = new SkillTag();
@@ -182,9 +176,6 @@ public class ProfileController {
         } catch (DuplicateDataException e) {
             // 技能标签已存在
             return Result.fail(e.getReasonCode());
-        } catch (Exception e) {
-            // 未知异常
-            return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
         }
     }
 }
