@@ -14,6 +14,7 @@ public enum ReasonCode {
     PARAM_ERROR("M1001", "参数错误"),
     NOT_FOUND("M1002", "资源不存在"),
     STATUS_CONFLICT("M1003", "状态冲突"),
+    FORBIDDEN("M1004", "无权访问该资源"),
 
     // M3 认证与档案错误（M30xx）
     UNAUTHORIZED("M3000", "未授权，请重新登录"),
