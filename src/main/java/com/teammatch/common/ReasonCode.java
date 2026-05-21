@@ -21,6 +21,8 @@ public enum ReasonCode {
     EMAIL_OCCUPIED("M3002", "该邮箱已被其他用户绑定"),
     INVALID_CODE("M3003", "验证码错误或已过期"),
     SEND_CODE_TOO_FREQUENT("M3004", "发送验证码过于频繁"),
+    INVALID_EMAIL("M3023", "邮箱格式不正确"),
+    EMAIL_SEND_FAILED("M3024", "邮件发送失败，请稍后重试"),
     USERNAME_OCCUPIED("M3005", "该用户名已被占用"),
     USERNAME_ALREADY_BOUND("M3006", "用户名已绑定，请使用修改接口"),
     PASSWORD_TOO_SHORT("M3007", "密码长度不能少于6位"),
