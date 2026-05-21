@@ -5,7 +5,7 @@ import com.teammatch.common.Result;
 import com.teammatch.entity.Appeal;
 import com.teammatch.m6.dto.AppealCreateDTO;
 import com.teammatch.m6.service.AppealService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,24 +24,17 @@ import java.util.List;
 public class AppealController {
 
     private final AppealService appealService;
-    private final AuthService authService;
+    private final AuthUtil authUtil;
 
     /**
      * 提交申诉
      * POST /api/appeals
-     *
-     * @param token 认证token
-     * @param dto 申诉请求
-     * @return 创建的申诉记录
      */
     @PostMapping
     public Result<Appeal> createAppeal(
             @RequestHeader("Authorization") String token,
             @Valid @RequestBody AppealCreateDTO dto) {
-        Long userId = authService.getUserIdFromToken(token);
-        if (userId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
+        Long userId = authUtil.requireUserId(token);
 
         try {
             Appeal appeal = appealService.createAppeal(userId, dto);
@@ -56,17 +49,10 @@ public class AppealController {
     /**
      * 获取我的申诉列表
      * GET /api/appeals/my
-     *
-     * @param token 认证token
-     * @return 申诉列表
      */
     @GetMapping("/my")
     public Result<List<Appeal>> getMyAppeals(@RequestHeader("Authorization") String token) {
-        Long userId = authService.getUserIdFromToken(token);
-        if (userId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
-
+        Long userId = authUtil.requireUserId(token);
         List<Appeal> appeals = appealService.getMyAppeals(userId);
         return Result.success(appeals);
     }
@@ -74,26 +60,18 @@ public class AppealController {
     /**
      * 获取申诉详情
      * GET /api/appeals/{id}
-     *
-     * @param token 认证token
-     * @param id 申诉ID
-     * @return 申诉详情
      */
     @GetMapping("/{id}")
     public Result<Appeal> getAppealById(
             @RequestHeader("Authorization") String token,
             @PathVariable("id") Long id) {
-        Long userId = authService.getUserIdFromToken(token);
-        if (userId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
+        Long userId = authUtil.requireUserId(token);
 
         Appeal appeal = appealService.getAppealById(id);
         if (appeal == null) {
             return Result.fail(ReasonCode.NOT_FOUND);
         }
 
-        // 只能查看自己的申诉
         if (!appeal.getUserId().equals(userId)) {
             return Result.fail(ReasonCode.FORBIDDEN);
         }

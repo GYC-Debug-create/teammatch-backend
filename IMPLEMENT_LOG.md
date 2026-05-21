@@ -1,5 +1,19 @@
 # IMPLEMENT_LOG
 
+## 2026-05-19 M6 Controller 统一 AuthUtil 认证
+
+**改动：** M6 全部需鉴权 Controller 从直接调用 `AuthService` 迁移为 `AuthUtil`（`requireUserId` / `requireAdmin`），认证异常交由 `AuthExceptionHandler` 统一返回 M3000/M3009。
+
+**涉及文件：**
+- Controller：`PenaltyController`、`PenaltyAdminController`、`ReportController`、`ReportAdminController`、`BoardController`、`AppealController`、`AppealAdminController`
+- 测试：M6 全部 7 个 Controller 均有 `*ControllerTest`（含 `AppealControllerTest`、`AppealAdminControllerTest`）；`AppealServiceTest` 覆盖 Service 层
+
+**约定：**
+- 用户端：`authUtil.requireUserId(token)`
+- 管理端：`authUtil.requireAdmin(token)`；需操作人 ID 时再 `authUtil.requireUserId(token)`
+
+---
+
 ## 2026-05-18 M4 退出扣分并发边界补测
 
 **问题：** `selfExit` 已通过 `memberRows != 1` 拦截 team_member CAS 异常结果，但原单测只覆盖 `memberRows == 0` 的并发抢占场景，未显式覆盖异常多行边界。

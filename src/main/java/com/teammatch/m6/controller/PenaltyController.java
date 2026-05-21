@@ -1,10 +1,9 @@
 package com.teammatch.m6.controller;
 
-import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.service.PenaltyService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,23 +22,15 @@ import java.util.List;
 public class PenaltyController {
 
     private final PenaltyService penaltyService;
-    private final AuthService authService;
+    private final AuthUtil authUtil;
 
     /**
      * 获取我的处罚记录列表
      * GET /api/penalties/my
-     *
-     * @param token 认证token
-     * @return 处罚记录列表
      */
     @GetMapping("/my")
     public Result<List<Penalty>> getMyPenalties(@RequestHeader("Authorization") String token) {
-        // 从token获取当前用户ID
-        Long userId = authService.getUserIdFromToken(token);
-        if (userId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
-
+        Long userId = authUtil.requireUserId(token);
         List<Penalty> penalties = penaltyService.getUserPenalties(userId);
         return Result.success(penalties);
     }
@@ -47,18 +38,10 @@ public class PenaltyController {
     /**
      * 获取我生效中的处罚记录
      * GET /api/penalties/my/active
-     *
-     * @param token 认证token
-     * @return 生效中的处罚记录列表
      */
     @GetMapping("/my/active")
     public Result<List<Penalty>> getMyActivePenalties(@RequestHeader("Authorization") String token) {
-        // 从token获取当前用户ID
-        Long userId = authService.getUserIdFromToken(token);
-        if (userId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
-
+        Long userId = authUtil.requireUserId(token);
         List<Penalty> penalties = penaltyService.getUserActivePenalties(userId);
         return Result.success(penalties);
     }

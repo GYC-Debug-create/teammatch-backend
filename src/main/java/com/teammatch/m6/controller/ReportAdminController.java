@@ -5,7 +5,7 @@ import com.teammatch.common.Result;
 import com.teammatch.m6.dto.ReportHandleDTO;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.service.ReportService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -25,26 +25,17 @@ import java.util.List;
 public class ReportAdminController {
 
     private final ReportService reportService;
-    private final AuthService authService;
+    private final AuthUtil authUtil;
 
     /**
      * 获取举报列表
      * GET /api/admin/reports
-     * 需要管理员权限
-     *
-     * @param status 状态筛选（可选：pending/resolved/dismissed）
-     * @param token  认证token
-     * @return 举报列表
      */
     @GetMapping
     public Result<List<Report>> getReportList(
             @RequestParam(required = false) String status,
             @RequestHeader("Authorization") String token) {
-        // 校验管理员权限
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
-
+        authUtil.requireAdmin(token);
         List<Report> reports = reportService.getReportList(status);
         return Result.success(reports);
     }
@@ -52,19 +43,11 @@ public class ReportAdminController {
     /**
      * 获取举报详情
      * GET /api/admin/reports/{id}
-     * 需要管理员权限
-     *
-     * @param id    举报ID
-     * @param token 认证token
-     * @return 举报详情
      */
     @GetMapping("/{id}")
     public Result<Report> getReport(@PathVariable Long id,
-                                     @RequestHeader("Authorization") String token) {
-        // 校验管理员权限
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
+                                    @RequestHeader("Authorization") String token) {
+        authUtil.requireAdmin(token);
 
         Report report = reportService.getReportById(id);
         if (report == null) {
@@ -76,27 +59,13 @@ public class ReportAdminController {
     /**
      * 处理举报
      * PUT /api/admin/reports/{id}/handle
-     * 需要管理员权限
-     *
-     * @param id    举报ID
-     * @param dto   处理请求
-     * @param token 认证token
-     * @return 处理后的举报记录
      */
     @PutMapping("/{id}/handle")
     public Result<Report> handleReport(@PathVariable Long id,
                                        @Valid @RequestBody ReportHandleDTO dto,
                                        @RequestHeader("Authorization") String token) {
-        // 校验管理员权限
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
-
-        // 获取处理人ID（管理员ID）
-        Long handlerId = authService.getUserIdFromToken(token);
-        if (handlerId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
+        authUtil.requireAdmin(token);
+        Long handlerId = authUtil.requireUserId(token);
 
         try {
             Report report = reportService.handleReport(id, handlerId, dto);

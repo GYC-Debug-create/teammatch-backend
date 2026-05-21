@@ -4,14 +4,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.dto.ReportCreateDTO;
 import com.teammatch.m6.entity.Report;
+import com.teammatch.config.AuthExceptionHandler;
+import com.teammatch.exception.AuthenticationException;
 import com.teammatch.m6.service.ReportService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -32,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 测试用户端举报接口
  */
 @WebMvcTest(ReportController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("举报控制器测试（用户端）")
 class ReportControllerTest {
 
@@ -45,7 +49,7 @@ class ReportControllerTest {
     private ReportService reportService;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     private static final String TOKEN = "Bearer test-token";
     private static final Long REPORTER_ID = 100L;
@@ -62,8 +66,7 @@ class ReportControllerTest {
         mockReport.setReason("违规内容");
         mockReport.setStatus("pending");
 
-        // Mock authService.getUserIdFromToken
-        when(authService.getUserIdFromToken(TOKEN)).thenReturn(REPORTER_ID);
+        when(authUtil.requireUserId(TOKEN)).thenReturn(REPORTER_ID);
     }
 
     // ==================== createReport ====================
@@ -126,7 +129,8 @@ class ReportControllerTest {
     @Test
     @DisplayName("createReport: Token无效返回UNAUTHORIZED")
     void createReport_invalidToken() throws Exception {
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireUserId("Bearer invalid-token");
 
         ReportCreateDTO dto = new ReportCreateDTO();
         dto.setTargetType("user");
@@ -282,7 +286,8 @@ class ReportControllerTest {
     @Test
     @DisplayName("getMyReports: Token无效返回UNAUTHORIZED")
     void getMyReports_invalidToken() throws Exception {
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireUserId("Bearer invalid-token");
 
         mockMvc.perform(get("/reports/my")
                         .header("Authorization", "Bearer invalid-token"))

@@ -5,14 +5,18 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.dto.PenaltyCreateDTO;
 import com.teammatch.m6.dto.PenaltyRevokeDTO;
 import com.teammatch.m6.entity.Penalty;
+import com.teammatch.config.AuthExceptionHandler;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
 import com.teammatch.m6.service.PenaltyService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -32,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 测试管理端处罚接口
  */
 @WebMvcTest(PenaltyAdminController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("处罚管理控制器测试（管理端）")
 class PenaltyAdminControllerTest {
 
@@ -45,7 +50,7 @@ class PenaltyAdminControllerTest {
     private PenaltyService penaltyService;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     private static final String ADMIN_TOKEN = "Bearer admin-token";
     private static final Long ADMIN_ID = 999L;
@@ -88,9 +93,7 @@ class PenaltyAdminControllerTest {
         revokedPenalty.setRevokedAt(LocalDateTime.now());
         revokedPenalty.setCreatedAt(LocalDateTime.now().minusDays(3));
 
-        // Mock authService
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-        when(authService.getUserIdFromToken(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
+        lenient().when(authUtil.requireUserId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
     }
 
     // ==================== 权限校验 ====================
@@ -98,7 +101,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("createPenalty: 非管理员访问返回403")
     void createPenalty_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         PenaltyCreateDTO dto = new PenaltyCreateDTO();
         dto.setUserId(USER_ID);
@@ -119,7 +123,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("getPenaltyList: 非管理员访问返回403")
     void getPenaltyList_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/penalties")
                         .header("Authorization", ADMIN_TOKEN))
@@ -132,7 +137,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("getPenalty: 非管理员访问返回403")
     void getPenalty_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/penalties/1")
                         .header("Authorization", ADMIN_TOKEN))
@@ -145,7 +151,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("revokePenalty: 非管理员访问返回403")
     void revokePenalty_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
         dto.setReason("申诉通过");
@@ -260,8 +267,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("createPenalty: Token无效返回UNAUTHORIZED")
     void createPenalty_invalidToken_returnsUnauthorized() throws Exception {
-        when(authService.isAdmin("Bearer invalid-token")).thenReturn(true);
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
 
         PenaltyCreateDTO dto = new PenaltyCreateDTO();
         dto.setUserId(USER_ID);
@@ -437,8 +444,8 @@ class PenaltyAdminControllerTest {
     @Test
     @DisplayName("revokePenalty: Token无效返回UNAUTHORIZED")
     void revokePenalty_invalidToken_returnsUnauthorized() throws Exception {
-        when(authService.isAdmin("Bearer invalid-token")).thenReturn(true);
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
 
         PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
         dto.setReason("申诉通过");

@@ -5,7 +5,7 @@ import com.teammatch.common.Result;
 import com.teammatch.m6.dto.ReportCreateDTO;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.service.ReportService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,24 +24,16 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
-    private final AuthService authService;
+    private final AuthUtil authUtil;
 
     /**
      * 提交举报
      * POST /api/reports
-     *
-     * @param dto   举报请求
-     * @param token 认证token
-     * @return 创建的举报记录
      */
     @PostMapping
     public Result<Report> createReport(@Valid @RequestBody ReportCreateDTO dto,
                                        @RequestHeader("Authorization") String token) {
-        // 从token获取当前用户ID
-        Long reporterId = authService.getUserIdFromToken(token);
-        if (reporterId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
+        Long reporterId = authUtil.requireUserId(token);
 
         try {
             Report report = reportService.createReport(reporterId, dto);
@@ -54,18 +46,10 @@ public class ReportController {
     /**
      * 获取我的举报列表
      * GET /api/reports/my
-     *
-     * @param token 认证token
-     * @return 举报列表
      */
     @GetMapping("/my")
     public Result<List<Report>> getMyReports(@RequestHeader("Authorization") String token) {
-        // 从token获取当前用户ID
-        Long reporterId = authService.getUserIdFromToken(token);
-        if (reporterId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
-
+        Long reporterId = authUtil.requireUserId(token);
         List<Report> reports = reportService.getMyReports(reporterId);
         return Result.success(reports);
     }

@@ -4,14 +4,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.dto.ReportHandleDTO;
 import com.teammatch.m6.entity.Report;
+import com.teammatch.config.AuthExceptionHandler;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
 import com.teammatch.m6.service.ReportService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 测试管理端举报接口
  */
 @WebMvcTest(ReportAdminController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("举报管理控制器测试（管理端）")
 class ReportAdminControllerTest {
 
@@ -44,7 +49,7 @@ class ReportAdminControllerTest {
     private ReportService reportService;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     private static final String ADMIN_TOKEN = "Bearer admin-token";
     private static final Long REPORT_ID = 1L;
@@ -73,8 +78,7 @@ class ReportAdminControllerTest {
         resolvedReport.setHandlerId(HANDLER_ID);
         resolvedReport.setHandleResult("已处理");
 
-        // Mock authService.getUserIdFromToken for handleReport tests
-        when(authService.getUserIdFromToken(ADMIN_TOKEN)).thenReturn(HANDLER_ID);
+        lenient().when(authUtil.requireUserId(ADMIN_TOKEN)).thenReturn(HANDLER_ID);
     }
 
     // ==================== 权限校验 ====================
@@ -82,7 +86,8 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReportList: 非管理员访问返回403")
     void getReportList_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/reports")
                         .header("Authorization", ADMIN_TOKEN))
@@ -95,7 +100,8 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReport: 非管理员访问返回403")
     void getReport_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/reports/1")
                         .header("Authorization", ADMIN_TOKEN))
@@ -108,7 +114,8 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 非管理员访问返回403")
     void handleReport_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         ReportHandleDTO dto = new ReportHandleDTO();
         dto.setStatus("resolved");
@@ -126,8 +133,8 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: Token无效返回UNAUTHORIZED")
     void handleReport_invalidToken_returnsUnauthorized() throws Exception {
-        when(authService.isAdmin("Bearer invalid-token")).thenReturn(true);
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
 
         ReportHandleDTO dto = new ReportHandleDTO();
         dto.setStatus("resolved");
@@ -147,7 +154,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReportList: 管理员查询全部举报")
     void getReportList_all_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         List<Report> reports = Arrays.asList(pendingReport, resolvedReport);
         when(reportService.getReportList(null)).thenReturn(reports);
 
@@ -162,7 +168,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReportList: 管理员按pending状态筛选")
     void getReportList_pending_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportList("pending")).thenReturn(Arrays.asList(pendingReport));
 
         mockMvc.perform(get("/admin/reports")
@@ -176,7 +181,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReportList: 管理员按resolved状态筛选")
     void getReportList_resolved_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportList("resolved")).thenReturn(Arrays.asList(resolvedReport));
 
         mockMvc.perform(get("/admin/reports")
@@ -200,7 +204,6 @@ class ReportAdminControllerTest {
         dismissedReport.setHandlerId(HANDLER_ID);
         dismissedReport.setHandleResult("举报不实，予以驳回");
 
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportList("dismissed")).thenReturn(Arrays.asList(dismissedReport));
 
         mockMvc.perform(get("/admin/reports")
@@ -214,7 +217,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReportList: 空结果返回空列表")
     void getReportList_empty() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportList(any())).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/admin/reports")
@@ -229,7 +231,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReport: 管理员获取举报详情")
     void getReport_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportById(REPORT_ID)).thenReturn(pendingReport);
 
         mockMvc.perform(get("/admin/reports/1")
@@ -243,7 +244,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("getReport: 举报不存在返回NOT_FOUND")
     void getReport_notFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.getReportById(999L)).thenReturn(null);
 
         mockMvc.perform(get("/admin/reports/999")
@@ -257,8 +257,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 管理员处理举报为resolved")
     void handleReport_resolve_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         Report handledReport = new Report();
         handledReport.setId(REPORT_ID);
         handledReport.setStatus("resolved");
@@ -285,8 +283,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 管理员处理举报为dismissed")
     void handleReport_dismiss_success() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         Report handledReport = new Report();
         handledReport.setId(REPORT_ID);
         handledReport.setStatus("dismissed");
@@ -311,8 +307,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 参数校验失败返回400")
     void handleReport_validationError() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         ReportHandleDTO dto = new ReportHandleDTO();
         // status为空，触发@NotBlank校验
         dto.setHandleResult("处理结果");
@@ -329,8 +323,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 非法状态值返回400")
     void handleReport_invalidStatus() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         ReportHandleDTO dto = new ReportHandleDTO();
         dto.setStatus("invalid"); // 非法值，只能是resolved或dismissed
 
@@ -344,8 +336,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: handleResult超长返回400")
     void handleReport_handleResultTooLong() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         ReportHandleDTO dto = new ReportHandleDTO();
         dto.setStatus("resolved");
         dto.setHandleResult("a".repeat(501)); // 超过500字符限制
@@ -362,8 +352,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 无handleResult也能正常处理")
     void handleReport_noHandleResult() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-
         Report handledReport = new Report();
         handledReport.setId(REPORT_ID);
         handledReport.setStatus("resolved");
@@ -389,7 +377,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 举报不存在返回NOT_FOUND")
     void handleReport_notFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.handleReport(any(), any(), any()))
                 .thenThrow(new IllegalArgumentException("举报不存在"));
 
@@ -407,7 +394,6 @@ class ReportAdminControllerTest {
     @Test
     @DisplayName("handleReport: 重复处理返回STATUS_CONFLICT")
     void handleReport_alreadyHandled() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(reportService.handleReport(any(), any(), any()))
                 .thenThrow(new IllegalStateException("举报已处理"));
 

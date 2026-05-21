@@ -5,7 +5,7 @@ import com.teammatch.common.Result;
 import com.teammatch.entity.Appeal;
 import com.teammatch.m6.dto.AppealHandleDTO;
 import com.teammatch.m6.service.AppealService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,27 +24,18 @@ import java.util.List;
 public class AppealAdminController {
 
     private final AppealService appealService;
-    private final AuthService authService;
+    private final AuthUtil authUtil;
 
     /**
      * 获取申诉列表
      * GET /api/admin/appeals?status=&targetType=
-     *
-     * @param token 认证token
-     * @param status 状态筛选（可选）
-     * @param targetType 目标类型筛选（可选）
-     * @return 申诉列表
      */
     @GetMapping
     public Result<List<Appeal>> getAppealList(
             @RequestHeader("Authorization") String token,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String targetType) {
-        // 校验管理员权限
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
-
+        authUtil.requireAdmin(token);
         List<Appeal> appeals = appealService.getAppealList(status, targetType);
         return Result.success(appeals);
     }
@@ -52,19 +43,12 @@ public class AppealAdminController {
     /**
      * 获取申诉详情
      * GET /api/admin/appeals/{id}
-     *
-     * @param token 认证token
-     * @param id 申诉ID
-     * @return 申诉详情
      */
     @GetMapping("/{id}")
     public Result<Appeal> getAppealById(
             @RequestHeader("Authorization") String token,
             @PathVariable("id") Long id) {
-        // 校验管理员权限
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
+        authUtil.requireAdmin(token);
 
         Appeal appeal = appealService.getAppealById(id);
         if (appeal == null) {
@@ -77,22 +61,14 @@ public class AppealAdminController {
     /**
      * 处理申诉
      * PUT /api/admin/appeals/{id}/handle
-     *
-     * @param token 认证token
-     * @param id 申诉ID
-     * @param dto 处理请求
-     * @return 处理后的申诉记录
      */
     @PutMapping("/{id}/handle")
     public Result<Appeal> handleAppeal(
             @RequestHeader("Authorization") String token,
             @PathVariable("id") Long id,
             @Valid @RequestBody AppealHandleDTO dto) {
-        // 校验管理员权限并获取管理员ID
-        Long handlerId = authService.getUserIdFromToken(token);
-        if (handlerId == null || !authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
+        authUtil.requireAdmin(token);
+        Long handlerId = authUtil.requireUserId(token);
 
         try {
             Appeal appeal = appealService.handleAppeal(id, handlerId, dto);

@@ -3,14 +3,17 @@ package com.teammatch.m6.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.entity.Penalty;
+import com.teammatch.config.AuthExceptionHandler;
+import com.teammatch.exception.AuthenticationException;
 import com.teammatch.m6.service.PenaltyService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -29,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 测试用户端处罚查询接口
  */
 @WebMvcTest(PenaltyController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("处罚控制器测试（用户端）")
 class PenaltyControllerTest {
 
@@ -42,7 +46,7 @@ class PenaltyControllerTest {
     private PenaltyService penaltyService;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     private static final String TOKEN = "Bearer test-token";
     private static final Long USER_ID = 100L;
@@ -70,8 +74,7 @@ class PenaltyControllerTest {
         revokedPenalty.setRevokedAt(LocalDateTime.now());
         revokedPenalty.setCreatedAt(LocalDateTime.now().minusDays(2));
 
-        // Mock authService.getUserIdFromToken
-        when(authService.getUserIdFromToken(TOKEN)).thenReturn(USER_ID);
+        when(authUtil.requireUserId(TOKEN)).thenReturn(USER_ID);
     }
 
     // ==================== getMyPenalties ====================
@@ -110,7 +113,8 @@ class PenaltyControllerTest {
     @Test
     @DisplayName("getMyPenalties: Token无效返回UNAUTHORIZED")
     void getMyPenalties_invalidToken() throws Exception {
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireUserId("Bearer invalid-token");
 
         mockMvc.perform(get("/penalties/my")
                         .header("Authorization", "Bearer invalid-token"))
@@ -153,7 +157,8 @@ class PenaltyControllerTest {
     @Test
     @DisplayName("getMyActivePenalties: Token无效返回UNAUTHORIZED")
     void getMyActivePenalties_invalidToken() throws Exception {
-        when(authService.getUserIdFromToken("Bearer invalid-token")).thenReturn(null);
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireUserId("Bearer invalid-token");
 
         mockMvc.perform(get("/penalties/my/active")
                         .header("Authorization", "Bearer invalid-token"))

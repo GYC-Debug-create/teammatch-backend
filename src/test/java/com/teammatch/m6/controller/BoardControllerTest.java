@@ -5,14 +5,18 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.dto.BoardCreateDTO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
+import com.teammatch.config.AuthExceptionHandler;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
 import com.teammatch.m6.service.BoardService;
-import com.teammatch.service.AuthService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -31,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 测试认证鉴权和接口响应
  */
 @WebMvcTest(BoardController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("板块管理控制器测试")
 class BoardControllerTest {
 
@@ -44,7 +49,7 @@ class BoardControllerTest {
     private BoardService boardService;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     private static final String ADMIN_TOKEN = "Bearer admin-token";
     private static final String USER_TOKEN = "Bearer user-token";
@@ -64,9 +69,30 @@ class BoardControllerTest {
     // ==================== 认证失败场景 ====================
 
     @Test
+    @DisplayName("createBoard: Token无效返回M3000")
+    void createBoard_invalidToken_returnsUnauthorized() throws Exception {
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
+
+        BoardCreateDTO dto = new BoardCreateDTO();
+        dto.setName("新板块");
+        dto.setDescription("描述");
+
+        mockMvc.perform(post("/admin/boards")
+                        .header("Authorization", "Bearer invalid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
+
+        verify(boardService, never()).createBoard(any());
+    }
+
+    @Test
     @DisplayName("createBoard: 非管理员访问返回403")
     void createBoard_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         BoardCreateDTO dto = new BoardCreateDTO();
         dto.setName("新板块");
@@ -85,7 +111,8 @@ class BoardControllerTest {
     @Test
     @DisplayName("updateBoard: 非管理员访问返回403")
     void updateBoard_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         BoardUpdateDTO dto = new BoardUpdateDTO();
         dto.setDescription("更新描述");
@@ -103,7 +130,8 @@ class BoardControllerTest {
     @Test
     @DisplayName("deleteBoard: 非管理员访问返回403")
     void deleteBoard_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(delete("/admin/boards/1")
                         .header("Authorization", ADMIN_TOKEN))
@@ -116,7 +144,8 @@ class BoardControllerTest {
     @Test
     @DisplayName("getBoard: 非管理员访问返回403")
     void getBoard_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/boards/1")
                         .header("Authorization", ADMIN_TOKEN))
@@ -129,7 +158,8 @@ class BoardControllerTest {
     @Test
     @DisplayName("listBoards: 非管理员访问返回403")
     void listBoards_nonAdmin_returnsForbidden() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/boards")
                         .header("Authorization", ADMIN_TOKEN))
@@ -144,7 +174,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("createBoard: 管理员成功创建板块")
     void createBoard_adminSuccess() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.createBoard(any(BoardCreateDTO.class))).thenReturn(mockBoard);
 
         BoardCreateDTO dto = new BoardCreateDTO();
@@ -166,7 +195,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("updateBoard: 管理员成功更新板块")
     void updateBoard_adminSuccess() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.updateBoard(eq(1L), any(BoardUpdateDTO.class))).thenReturn(mockBoard);
 
         BoardUpdateDTO dto = new BoardUpdateDTO();
@@ -186,7 +214,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("deleteBoard: 管理员成功删除板块")
     void deleteBoard_adminSuccess() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         doNothing().when(boardService).deleteBoard(1L);
 
         mockMvc.perform(delete("/admin/boards/1")
@@ -200,7 +227,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("getBoard: 管理员成功获取板块详情")
     void getBoard_adminSuccess() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.getBoardById(1L)).thenReturn(mockBoard);
 
         mockMvc.perform(get("/admin/boards/1")
@@ -215,7 +241,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("listBoards: 管理员成功获取板块列表")
     void listBoards_adminSuccess() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         List<Board> boards = Arrays.asList(mockBoard);
         when(boardService.list()).thenReturn(boards);
 
@@ -234,7 +259,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("createBoard: 参数错误返回PARAM_ERROR")
     void createBoard_paramError() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.createBoard(any())).thenThrow(new IllegalArgumentException("板块名称已存在"));
 
         BoardCreateDTO dto = new BoardCreateDTO();
@@ -251,7 +275,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("updateBoard: 板块不存在返回NOT_FOUND")
     void updateBoard_notFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.updateBoard(any(), any())).thenThrow(new IllegalArgumentException("板块不存在: 999"));
 
         BoardUpdateDTO dto = new BoardUpdateDTO();
@@ -268,7 +291,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("deleteBoard: 板块有项目引用返回STATUS_CONFLICT")
     void deleteBoard_hasProjects() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         doThrow(new IllegalStateException("该板块下存在项目")).when(boardService).deleteBoard(1L);
 
         mockMvc.perform(delete("/admin/boards/1")
@@ -280,7 +302,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("getBoard: 板块不存在返回NOT_FOUND")
     void getBoard_notFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         when(boardService.getBoardById(999L)).thenReturn(null);
 
         mockMvc.perform(get("/admin/boards/999")
@@ -292,7 +313,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("updateBoard: 参数错误（非板块不存在）返回PARAM_ERROR")
     void updateBoard_paramError_notNotFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         // 抛出不含"板块不存在"的IllegalArgumentException，应返回PARAM_ERROR
         when(boardService.updateBoard(any(), any())).thenThrow(new IllegalArgumentException("板块名称已存在"));
 
@@ -310,7 +330,6 @@ class BoardControllerTest {
     @Test
     @DisplayName("deleteBoard: 板块不存在返回NOT_FOUND")
     void deleteBoard_notFound() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
         doThrow(new IllegalArgumentException("板块不存在: 999")).when(boardService).deleteBoard(999L);
 
         mockMvc.perform(delete("/admin/boards/999")
