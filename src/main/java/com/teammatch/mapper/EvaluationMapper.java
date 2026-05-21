@@ -95,4 +95,15 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
      */
     @Select("SELECT * FROM evaluation WHERE id = #{id} FOR UPDATE")
     Evaluation selectByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 查询用户收到的所有互评（按 target_id）
+     * M5-8A B5 使用，前台匿名展示。
+     * 过滤 voided 和 projectId 二次过滤在 Controller 层完成。
+     *
+     * @param targetId 被评价人（即当前用户）ID
+     * @return 该用户收到的全部互评记录
+     */
+    @Select("SELECT * FROM evaluation WHERE target_id = #{targetId} ORDER BY created_at DESC")
+    List<Evaluation> findByTargetId(@Param("targetId") Long targetId);
 }
