@@ -3,6 +3,7 @@ package com.teammatch.m6.controller;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.entity.Appeal;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.dto.AppealHandleDTO;
 import com.teammatch.m6.service.AppealService;
 import com.teammatch.util.AuthUtil;
@@ -77,6 +78,10 @@ public class AppealAdminController {
             return Result.of(ReasonCode.PARAM_ERROR.getCode(), e.getMessage(), null);
         } catch (IllegalStateException e) {
             return Result.of(ReasonCode.STATUS_CONFLICT.getCode(), e.getMessage(), null);
+        } catch (BusinessException e) {
+            return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
+        } catch (RuntimeException e) {
+            return Result.of(ReasonCode.UNKNOWN_ERROR.getCode(), e.getMessage(), null);
         }
     }
 }

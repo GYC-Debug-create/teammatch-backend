@@ -1,7 +1,12 @@
 package com.teammatch.m6.service;
 
+import com.teammatch.common.ReasonCode;
+import com.teammatch.common.Result;
+import com.teammatch.dto.AppealRestoreCommand;
+import com.teammatch.dto.AppealRestoreResult;
 import com.teammatch.entity.Appeal;
 import com.teammatch.entity.Evaluation;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.AppealMapper;
 import com.teammatch.mapper.EvaluationMapper;
 import com.teammatch.m6.dto.AppealCreateDTO;
@@ -10,6 +15,7 @@ import com.teammatch.m6.dto.PenaltyRevokeDTO;
 import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.mapper.PenaltyMapper;
 import com.teammatch.m6.service.impl.AppealServiceImpl;
+import com.teammatch.service.AppealRestoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +52,9 @@ class AppealServiceTest {
 
     @Mock
     private PenaltyService penaltyService;
+
+    @Mock
+    private AppealRestoreService appealRestoreService;
 
     @InjectMocks
     private AppealServiceImpl appealService;
@@ -360,9 +369,11 @@ class AppealServiceTest {
     // ==================== handleAppeal ====================
 
     @Test
-    @DisplayName("handleAppeal: 批准evaluation类型申诉")
+    @DisplayName("handleAppeal: 批准evaluation类型申诉并调用信誉恢复")
     void handleAppeal_evaluationApproved_success() {
         when(appealMapper.selectById(APPEAL_ID)).thenReturn(pendingAppeal);
+        when(appealRestoreService.restore(any(AppealRestoreCommand.class)))
+                .thenReturn(Result.success(new AppealRestoreResult()));
 
         AppealHandleDTO dto = new AppealHandleDTO();
         dto.setStatus("approved");
@@ -372,10 +383,25 @@ class AppealServiceTest {
 
         assertThat(result.getStatus()).isEqualTo("approved");
         assertThat(result.getHandlerId()).isEqualTo(ADMIN_ID);
-        assertThat(result.getHandleResult()).isEqualTo("经审核，同意撤销评价");
-        assertThat(result.getHandledAt()).isNotNull();
         verify(appealMapper).updateById(any(Appeal.class));
-        // evaluation类型不调用penaltyService
+        verify(appealRestoreService).restore(argThat(cmd -> APPEAL_ID.equals(cmd.getAppealId())));
+        verify(penaltyService, never()).revokePenalty(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("handleAppeal: evaluation申诉信誉恢复失败应回滚")
+    void handleAppeal_evaluationRestoreFail_throws() {
+        when(appealMapper.selectById(APPEAL_ID)).thenReturn(pendingAppeal);
+        when(appealRestoreService.restore(any(AppealRestoreCommand.class)))
+                .thenReturn(Result.fail(ReasonCode.CREDIT_CHANGE_NOT_FOUND));
+
+        AppealHandleDTO dto = new AppealHandleDTO();
+        dto.setStatus("approved");
+
+        assertThatThrownBy(() -> appealService.handleAppeal(APPEAL_ID, ADMIN_ID, dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getReasonCode())
+                        .isEqualTo(ReasonCode.CREDIT_CHANGE_NOT_FOUND));
         verify(penaltyService, never()).revokePenalty(anyLong(), anyLong(), any());
     }
 

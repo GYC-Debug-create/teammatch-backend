@@ -14,6 +14,67 @@
 
 ---
 
+## 2026-05-23 M6 治理闭环补全 & 与 M5-9 对齐
+
+### 与 M5 Gerrit（b05cea7）
+- 评价复核 HTTP 由 **M5-9** 提供（`EvaluationAdminController`），**不在本提交/本分支**，等队友 Change 合入后再 pull。
+- 此前误在本地复制 M5 的 Controller/DTO/测试，已全部删除（见下）。
+
+### M6 本轮交付
+1. **evaluation 申诉批准 → 信誉恢复**：`AppealServiceImpl` 调用 `AppealRestoreService.restore(appealId)`，失败 `BusinessException` 同事务回滚。
+2. **举报→处罚联动**：`ReportHandleDTO.createPenalty` 等字段；`ReportServiceImpl` 校验后同事务创建处罚。
+3. **文档**：`M6_API_Documentation.md` 更新举报/申诉/复核说明。
+
+### 仍待（后续迭代）
+- D-11/D-13 复核↔申诉级联（与 M5 协商）
+- 信誉流水审计 API（可选）
+- health / Jenkins 网站配置 / 部署文档（不在本次范围）
+
+---
+
+## 2026-05-22 M6 模块 CRUD & Code Review（历史）
+
+### 新增功能
+1. **申诉管理**（M6-4）：支持 evaluation/penalty 两种目标的申诉提交、审批，penalty 类型批准后自动撤销处罚。
+2. **举报-处罚联动**：`ReportServiceImpl.handleReport()` 新增 `createPenalty` 参数，处理举报时可联动创建处罚。
+
+### 重构
+- **Controller 鉴权迁移**：全部 Controller 从 `AuthService` 迁移为 `AuthUtil`，统一认证异常处理。
+- **新增常量类**：`PenaltyType`（处罚类型）、`CreditChangeType`（流水变更类型）。
+
+### Code Review 发现并修复的问题
+| 问题 | 状态 |
+|------|------|
+| Controller 鉴权重复代码 | 已迁移至 AuthUtil |
+| ReportHandleDTO 缺少处罚联动参数 | 已新增 createPenalty/penaltyType/creditDeductValue/penaltyReason |
+| ReportServiceImpl 处理举报后无处罚联动 | 已实现 createPenaltyFromReport |
+| 缺少 FORBIDDEN 错误码 | 已新增 ReasonCode.FORBIDDEN(M1004) |
+| function_limit 撤销时未检查其他生效处罚 | 已实现 restoreUserStatusIfNoActiveFunctionLimit |
+| 测试覆盖率不足 | 已补充边界/异常分支测试 |
+
+### M6 模块最终状态
+
+| 功能 | 接口数 | 状态 | 测试 |
+|------|--------|------|------|
+| 板块管理 (Board) | 6 | 完成 | BoardServiceTest + Controller |
+| 举报管理 (Report) | 5 | 完成 | ReportServiceTest + Controller |
+| 处罚管理 (Penalty) | 6 | 完成 | PenaltyServiceTest + Controller |
+| 申诉管理 (Appeal) | 6 | 完成（含 evaluation 恢复接线） | AppealServiceTest + Controller |
+| 评价复核 (Review) | 2 | **M5-9**（待合入 Gerrit b05cea7） | — |
+| **M6 治理接口** | **23** | 见 `M6_API_Documentation.md` | — |
+
+### API 文档
+- M6_API_Documentation.md：涵盖全部 23 个接口的请求/响应/权限说明
+
+### 需要队友配合的事项
+
+1. **M3 确认**：`user.credit_score` 和 `user.status` 的跨模块写入是否 OK。
+2. **M5 确认**：`credit_change` 表的 penalty / penalty_restore 流水写入是否 OK。
+3. **前端确认**：举报处理页面是否展示处罚联动参数（`createPenalty` 等）。
+4. **产品确认**：信誉分下限规则（目前可扣至负值，需统一设计后落地）。
+
+---
+
 ## 2026-05-18 M4 退出扣分并发边界补测
 
 **问题：** `selfExit` 已通过 `memberRows != 1` 拦截 team_member CAS 异常结果，但原单测只覆盖 `memberRows == 0` 的并发抢占场景，未显式覆盖异常多行边界。
@@ -119,7 +180,7 @@
   - 代码中所有字符串字面量（`"evaluation"` / `"approved"` / `"appeal_restore"`）已提取为 `static final` 常量。
 - 测试：19 单测全量通过，覆盖正常恢复（负分/正分/零分）、幂等跳过、effective=0 跳过、7 种异常分支（appeal 不存在/未批准/非 evaluation 类型/userId 不一致/evaluation 不存在/voided/原流水缺失）、2 种事务回滚（insert 失败/updateCreditScore 失败）。
 - 已知限制：
-  - 无 Controller 接口入口（M5-7 仅提供 Service，由 M6 审批流程中直接调用）。
+  - ~~无 Controller 接口入口~~（已由 M6 `AppealServiceImpl` 在批准申诉时调用 `AppealRestoreService`）。
   - `function_limit` 申诉恢复由 M6 单独实现，不在 M5-7 范围。
   - SELECT FOR UPDATE 锁竞争场景标注为集成测试/手工覆盖，不在 JUnit 单测中强制要求。
 

@@ -1,7 +1,11 @@
 package com.teammatch.m6.service.impl;
 
+import com.teammatch.common.ReasonCode;
+import com.teammatch.common.Result;
+import com.teammatch.dto.AppealRestoreCommand;
 import com.teammatch.entity.Appeal;
 import com.teammatch.entity.Evaluation;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.AppealMapper;
 import com.teammatch.mapper.EvaluationMapper;
 import com.teammatch.m6.dto.AppealCreateDTO;
@@ -11,6 +15,7 @@ import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.mapper.PenaltyMapper;
 import com.teammatch.m6.service.AppealService;
 import com.teammatch.m6.service.PenaltyService;
+import com.teammatch.service.AppealRestoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +38,7 @@ public class AppealServiceImpl implements AppealService {
     private final EvaluationMapper evaluationMapper;
     private final PenaltyMapper penaltyMapper;
     private final PenaltyService penaltyService;
+    private final AppealRestoreService appealRestoreService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -168,12 +174,11 @@ public class AppealServiceImpl implements AppealService {
 
     /**
      * 执行申诉批准的副作用
-     * - evaluation 类型：由 M5-7 的 AppealRestoreService 处理信誉恢复
+     * - evaluation 类型：调用 M5 AppealRestoreService 恢复信誉分
      * - penalty 类型：调用 PenaltyService.revokePenalty 撤销处罚
      */
     private void executeApprovedSideEffects(Appeal appeal, AppealHandleDTO dto) {
         if ("penalty".equals(appeal.getTargetType())) {
-            // 撤销处罚
             PenaltyRevokeDTO revokeDTO = new PenaltyRevokeDTO();
             revokeDTO.setReason("申诉通过: " + (dto.getHandleResult() != null ? dto.getHandleResult() : "经审核，撤销处罚"));
 
@@ -184,8 +189,14 @@ public class AppealServiceImpl implements AppealService {
                 log.error("处罚撤销失败: appealId={}, penaltyId={}", appeal.getId(), appeal.getTargetId(), e);
                 throw new RuntimeException("处罚撤销失败: " + e.getMessage(), e);
             }
+        } else if ("evaluation".equals(appeal.getTargetType())) {
+            Result<?> restoreResult = appealRestoreService.restore(new AppealRestoreCommand(appeal.getId()));
+            if (restoreResult.isFail()) {
+                ReasonCode code = ReasonCode.fromCode(restoreResult.getCode());
+                throw new BusinessException(code, restoreResult.getMessage());
+            }
+            log.info("申诉信誉恢复完成: appealId={}, targetId={}", appeal.getId(), appeal.getTargetId());
         }
-        // evaluation 类型的信誉恢复由 M5-7 的 AppealRestoreService 处理
     }
 
     @Override

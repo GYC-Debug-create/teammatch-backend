@@ -1,9 +1,13 @@
 package com.teammatch.m6.service;
 
+import com.teammatch.m6.constants.PenaltyType;
+import com.teammatch.m6.dto.PenaltyCreateDTO;
 import com.teammatch.m6.dto.ReportCreateDTO;
 import com.teammatch.m6.dto.ReportHandleDTO;
+import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.mapper.ReportMapper;
+import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.m6.service.impl.ReportServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -34,6 +39,9 @@ class ReportServiceTest {
 
     @Mock
     private ReportMapper reportMapper;
+
+    @Mock
+    private PenaltyService penaltyService;
 
     @InjectMocks
     private ReportServiceImpl service;
@@ -255,6 +263,63 @@ class ReportServiceTest {
         assertThatThrownBy(() -> service.handleReport(2L, HANDLER_ID, dto))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("举报已处理");
+    }
+
+    @Test
+    @DisplayName("handleReport: resolved且createPenalty联动创建处罚")
+    void handleReport_resolveWithPenalty_success() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+        Penalty penalty = new Penalty();
+        penalty.setId(10L);
+        when(penaltyService.createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class))).thenReturn(penalty);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(5);
+
+        service.handleReport(REPORT_ID, HANDLER_ID, dto);
+
+        verify(penaltyService).createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class));
+    }
+
+    @Test
+    @DisplayName("handleReport: project举报不可联动处罚")
+    void handleReport_projectWithPenalty_throws() {
+        Report projectReport = new Report();
+        projectReport.setId(REPORT_ID);
+        projectReport.setTargetType("project");
+        projectReport.setTargetId(300L);
+        projectReport.setStatus("pending");
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(projectReport);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(5);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("仅 user 类型举报");
+        verify(penaltyService, never()).createPenalty(any(), any());
+    }
+
+    @Test
+    @DisplayName("handleReport: createPenalty缺少penaltyType抛出异常")
+    void handleReport_createPenaltyMissingType_throws() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("penaltyType");
+        verify(reportMapper, never()).updateById(any());
     }
 
     @Test
