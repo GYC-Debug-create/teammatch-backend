@@ -1,7 +1,6 @@
 package com.teammatch.m6.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.dto.EvaluationReviewCommand;
 import com.teammatch.dto.EvaluationReviewResult;
@@ -9,8 +8,8 @@ import com.teammatch.entity.Evaluation;
 import com.teammatch.m6.dto.EvaluationReviewRequest;
 import com.teammatch.m6.dto.PendingEvaluationVO;
 import com.teammatch.mapper.EvaluationMapper;
-import com.teammatch.service.AuthService;
 import com.teammatch.service.EvaluationReviewService;
+import com.teammatch.util.AuthUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +34,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class EvaluationAdminController {
 
-    private final AuthService authService;
+    private final AuthUtil authUtil;
     private final EvaluationReviewService evaluationReviewService;
     private final EvaluationMapper evaluationMapper;
 
@@ -48,9 +47,7 @@ public class EvaluationAdminController {
     public Result<List<PendingEvaluationVO>> getPendingEvaluations(
             @RequestHeader("Authorization") String token,
             @RequestParam(required = false) Long projectId) {
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
+        authUtil.requireAdmin(token);
 
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Evaluation::getStatus, Evaluation.STATUS_PENDING_REVIEW);
@@ -77,14 +74,8 @@ public class EvaluationAdminController {
             @RequestHeader("Authorization") String token,
             @PathVariable("id") Long id,
             @RequestBody EvaluationReviewRequest request) {
-        if (!authService.isAdmin(token)) {
-            return Result.fail(ReasonCode.ADMIN_REQUIRED);
-        }
-
-        Long adminId = authService.getUserIdFromToken(token);
-        if (adminId == null) {
-            return Result.fail(ReasonCode.UNAUTHORIZED);
-        }
+        authUtil.requireAdmin(token);
+        Long adminId = authUtil.requireUserId(token);
 
         EvaluationReviewCommand command = new EvaluationReviewCommand();
         command.setEvaluationId(id);

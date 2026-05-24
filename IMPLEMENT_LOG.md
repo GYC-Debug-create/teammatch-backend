@@ -1,5 +1,42 @@
 # IMPLEMENT_LOG
 
+## 2026-05-24 M6 联调收尾（master 对齐）
+
+**背景：** master 已合入 M5-9 评价复核（`6b32911`）及 M6 治理闭环（`44969c1`）。Jenkins 远程已配置，部署脚本暂不做。
+
+### 本轮交付
+1. **`M6_API_Documentation.md`**：联调版全量重写——25 接口速查表、M3 登录路径、统一错误码、实体字段、Apifox 测试指南、M2 页面映射。
+2. **`EvaluationAdminController`**：鉴权从 `AuthService` 迁移至 `AuthUtil`，与其余 M6 Controller 一致。
+3. **`EvaluationAdminControllerTest`**：对齐 AuthUtil + `AuthExceptionHandler` 测试模式。
+
+### M6 模块当前状态
+
+| 功能 | 接口数 | 状态 | 测试 |
+|------|--------|------|------|
+| 板块管理 (Board) | 6 | 完成 | BoardServiceTest + Controller |
+| 举报管理 (Report) | 5 | 完成 | ReportServiceTest + Controller |
+| 处罚管理 (Penalty) | 6 | 完成 | PenaltyServiceTest + Controller |
+| 申诉管理 (Appeal) | 6 | 完成 | AppealServiceTest + Controller |
+| 评价复核 (Review) | 2 | 完成（M5-9 已合入） | EvaluationAdminControllerTest |
+| **M6 治理接口合计** | **25** | 见 `M6_API_Documentation.md` | 8 个 Controller 测试 |
+
+### 待协调（发群/当面确认）
+
+| 对象 | 事项 |
+|------|------|
+| **M2** | 拿更新后的 `M6_API_Documentation.md` 联调；举报处理页需支持 `createPenalty` 等字段 |
+| **M5** | D-11/D-13 复核↔申诉级联是否 P0、谁实现 |
+| **M3** | M6 写 `user.credit_score` / `user.status` 跨模块是否 OK；预置 admin 账号可用 |
+| **产品/全组** | 信誉分下限规则 |
+
+### 仍待（非阻塞联调）
+- D-11/D-13 级联实现
+- 管理端信誉流水审计 API（可选）
+- `/api/health`（可选）
+- 治理闭环端到端测试证据（`mvn test` + 手工链路）
+
+---
+
 ## 2026-05-19 M6 Controller 统一 AuthUtil 认证
 
 **改动：** M6 全部需鉴权 Controller 从直接调用 `AuthService` 迁移为 `AuthUtil`（`requireUserId` / `requireAdmin`），认证异常交由 `AuthExceptionHandler` 统一返回 M3000/M3009。
@@ -17,7 +54,7 @@
 ## 2026-05-23 M6 治理闭环补全 & 与 M5-9 对齐
 
 ### 与 M5 Gerrit（b05cea7）
-- 评价复核 HTTP 由 **M5-9** 提供（`EvaluationAdminController`），**不在本提交/本分支**，等队友 Change 合入后再 pull。
+- 评价复核 HTTP 由 **M5-9** 提供（`EvaluationAdminController`），**已于 master 合入**（`6b32911`）。
 - 此前误在本地复制 M5 的 Controller/DTO/测试，已全部删除（见下）。
 
 ### M6 本轮交付
@@ -60,8 +97,8 @@
 | 举报管理 (Report) | 5 | 完成 | ReportServiceTest + Controller |
 | 处罚管理 (Penalty) | 6 | 完成 | PenaltyServiceTest + Controller |
 | 申诉管理 (Appeal) | 6 | 完成（含 evaluation 恢复接线） | AppealServiceTest + Controller |
-| 评价复核 (Review) | 2 | **M5-9**（待合入 Gerrit b05cea7） | — |
-| **M6 治理接口** | **23** | 见 `M6_API_Documentation.md` | — |
+| 评价复核 (Review) | 2 | 完成（M5-9 已合入 master） | EvaluationAdminControllerTest |
+| **M6 治理接口** | **25** | 见 `M6_API_Documentation.md` | 8 个 Controller 测试 |
 
 ### API 文档
 - M6_API_Documentation.md：涵盖全部 23 个接口的请求/响应/权限说明

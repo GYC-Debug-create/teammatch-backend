@@ -3,14 +3,16 @@ package com.teammatch.m6.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
+import com.teammatch.config.AuthExceptionHandler;
 import com.teammatch.dto.EvaluationReviewCommand;
 import com.teammatch.dto.EvaluationReviewResult;
 import com.teammatch.entity.Evaluation;
+import com.teammatch.exception.AuthenticationException;
+import com.teammatch.exception.AuthorizationException;
 import com.teammatch.m6.dto.EvaluationReviewRequest;
 import com.teammatch.mapper.EvaluationMapper;
-import com.teammatch.exception.AuthenticationException;
-import com.teammatch.service.AuthService;
 import com.teammatch.service.EvaluationReviewService;
+import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,6 +32,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EvaluationAdminController.class)
+@Import(AuthExceptionHandler.class)
 @DisplayName("评价复核控制器测试（管理端）")
 class EvaluationAdminControllerTest {
 
@@ -48,7 +54,7 @@ class EvaluationAdminControllerTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private AuthService authService;
+    private AuthUtil authUtil;
 
     @MockBean
     private EvaluationReviewService evaluationReviewService;
@@ -94,8 +100,7 @@ class EvaluationAdminControllerTest {
         pendingEval2.setStatus(Evaluation.STATUS_PENDING_REVIEW);
         pendingEval2.setCreatedAt(LocalDateTime.now().minusDays(2));
 
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(true);
-        when(authService.getUserIdFromToken(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
+        lenient().when(authUtil.requireUserId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
     }
 
     // ==================== 鉴权 ====================
@@ -103,7 +108,8 @@ class EvaluationAdminControllerTest {
     @Test
     @DisplayName("B1: 非管理员访问 pending 列表返回 ADMIN_REQUIRED")
     void getPendingEvaluations_nonAdmin_returnsAdminRequired() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         mockMvc.perform(get("/admin/evaluations/pending")
                         .header("Authorization", ADMIN_TOKEN))
@@ -116,8 +122,8 @@ class EvaluationAdminControllerTest {
     @Test
     @DisplayName("B1: 无效 token 访问 pending 列表返回 M3000")
     void getPendingEvaluations_invalidToken_returnsUnauthorized() throws Exception {
-        when(authService.isAdmin("Bearer invalid"))
-                .thenThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED));
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid");
 
         mockMvc.perform(get("/admin/evaluations/pending")
                         .header("Authorization", "Bearer invalid"))
@@ -130,7 +136,8 @@ class EvaluationAdminControllerTest {
     @Test
     @DisplayName("B2: 非管理员执行复核返回 ADMIN_REQUIRED")
     void reviewEvaluation_nonAdmin_returnsAdminRequired() throws Exception {
-        when(authService.isAdmin(ADMIN_TOKEN)).thenReturn(false);
+        doThrow(new AuthorizationException(ReasonCode.ADMIN_REQUIRED))
+                .when(authUtil).requireAdmin(ADMIN_TOKEN);
 
         EvaluationReviewRequest request = new EvaluationReviewRequest("approve", "复核通过");
 
@@ -145,15 +152,15 @@ class EvaluationAdminControllerTest {
     }
 
     @Test
-    @DisplayName("B2: adminId 为 null 返回 UNAUTHORIZED")
-    void reviewEvaluation_nullAdminId_returnsUnauthorized() throws Exception {
-        when(authService.isAdmin("Bearer null-id-token")).thenReturn(true);
-        when(authService.getUserIdFromToken("Bearer null-id-token")).thenReturn(null);
+    @DisplayName("B2: 无效 token 执行复核返回 UNAUTHORIZED")
+    void reviewEvaluation_invalidToken_returnsUnauthorized() throws Exception {
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid");
 
         EvaluationReviewRequest request = new EvaluationReviewRequest("approve", "复核通过");
 
         mockMvc.perform(post("/admin/evaluations/1/review")
-                        .header("Authorization", "Bearer null-id-token")
+                        .header("Authorization", "Bearer invalid")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
