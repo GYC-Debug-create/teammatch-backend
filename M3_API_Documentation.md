@@ -598,6 +598,55 @@ Authorization: Bearer <管理员Token>
     "success": true
 }
 ```
+
+---
+#### 9. 获取指定用户的档案详情（供项目详情页显示用户名称用）
+**接口**: `GET /api/profile/detail/{userId}`
+
+**说明**: 根据 userId 获取任意用户的档案信息（不暴露 openid、passwordHash 等敏感字段）。
+用于项目详情页等场景，显示队长/成员的昵称和头像。
+
+**请求**:
+```
+需要 Token（任意已登录用户均可调用）
+路径参数: userId - 目标用户的 ID
+```
+
+**响应**:
+```json
+{
+    "code": "00000",
+    "message": "成功",
+    "data": {
+        "id": 2,
+        "nickname": "目标用户",
+        "avatarUrl": "http://avatar.url",
+        "email": null,
+        "emailVerified": false,
+        "school": null,
+        "major": null,
+        "grade": null,
+        "bio": null,
+        "githubUsername": null,
+        "githubClaimed": false,
+        "formalProfileCompleted": false,
+        "creditScore": 100,
+        "role": "user",
+        "status": "active",
+        "username": null,
+        "createdAt": null,
+        "updatedAt": null
+    },
+    "fail": false,
+    "success": true
+}
+```
+
+**业务规则**:
+- 需要有效的登录 Token，否则返回 `M3000` 错误
+- 若指定 userId 不存在，返回 `M1002` 错误
+- 返回 `ProfileDetailVO`，不包含 `openid`、`passwordHash` 等敏感字段
+
 ## 数据表结构
 
 ### user 表（用户表）

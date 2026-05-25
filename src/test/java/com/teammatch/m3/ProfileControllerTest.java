@@ -375,4 +375,54 @@ class ProfileControllerTest {
         assertThat(result.isFail()).isTrue();
         assertThat(result.getCode()).isEqualTo(ReasonCode.UNAUTHORIZED.getCode());
     }
+
+    // ==================== getUserProfile (新接口) ====================
+
+    @Test
+    @DisplayName("getUserProfile - 指定 userId 存在时应返回 ProfileDetailVO")
+    void getUserProfile_existingUser_shouldReturnProfile() {
+        Long targetUserId = 2L;
+        User user = new User();
+        user.setId(targetUserId);
+        user.setNickname("目标用户");
+        user.setAvatarUrl("http://avatar.url");
+        user.setRole("user");
+        user.setStatus("active");
+
+        when(profileService.getProfileById(targetUserId)).thenReturn(user);
+
+        Result<ProfileDetailVO> result = profileController.getUserProfile(targetUserId, validToken);
+
+        assertThat(result.isSuccess()).isTrue();
+        ProfileDetailVO vo = result.getData();
+        assertThat(vo).isNotNull();
+        assertThat(vo.getId()).isEqualTo(targetUserId);
+        assertThat(vo.getNickname()).isEqualTo("目标用户");
+        assertThat(vo.getAvatarUrl()).isEqualTo("http://avatar.url");
+        verify(profileService).getProfileById(targetUserId);
+    }
+
+    @Test
+    @DisplayName("getUserProfile - 用户不存在应返回 NOT_FOUND")
+    void getUserProfile_userNotFound_shouldReturnNotFound() {
+        Long nonExistentId = 999L;
+        when(profileService.getProfileById(nonExistentId)).thenReturn(null);
+
+        Result<ProfileDetailVO> result = profileController.getUserProfile(nonExistentId, validToken);
+
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("getUserProfile - 无效 token 应返回 M3000")
+    void getUserProfile_invalidToken_shouldReturnM3000() {
+        doThrow(new com.teammatch.exception.AuthenticationException(ReasonCode.UNAUTHORIZED))
+            .when(authUtil).requireUserId(anyString());
+
+        Result<ProfileDetailVO> result = profileController.getUserProfile(1L, "invalid_token");
+
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.UNAUTHORIZED.getCode());
+    }
 }
