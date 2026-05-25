@@ -10,6 +10,11 @@ import java.util.List;
 public interface ProfileService {
 
     /**
+     * 根据 ID 获取用户档案
+     */
+    User getProfileById(Long userId);
+
+    /**
      * 更新用户档案
      */
     void updateProfile(Long userId, User profile);

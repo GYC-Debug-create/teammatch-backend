@@ -4,9 +4,11 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.controller.ProfileController;
 import com.teammatch.dto.AddSkillTagRequest;
+import com.teammatch.dto.ProfileDetailVO;
 import com.teammatch.dto.UpdateProfileRequest;
 import com.teammatch.dto.UpdateUserSkillsRequest;
 import com.teammatch.entity.SkillTag;
+import com.teammatch.entity.User;
 import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
 import com.teammatch.service.AuthService;
@@ -280,6 +282,97 @@ class ProfileControllerTest {
         Result<Void> result = profileController.updateProfile(request, "invalid_token");
 
         assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.UNAUTHORIZED.getCode());
+    }
+
+    // ==================== getProfileDetail (VO 抽取后新接口) ====================
+
+    @Test
+    @DisplayName("getProfileDetail - 正常返回应包含正确的 VO 字段且不含敏感信息")
+    void getProfileDetail_shouldReturnProfileDetailVO() {
+        // Given: 构建一个完整的 User 实体
+        User user = new User();
+        user.setId(1L);
+        user.setOpenid("sensitive_openid");
+        user.setNickname("测试用户");
+        user.setAvatarUrl("http://avatar.url");
+        user.setEmail("test@test.com");
+        user.setEmailVerified(true);
+        user.setSchool("测试大学");
+        user.setMajor("计算机");
+        user.setGrade("2024");
+        user.setBio("个人简介");
+        user.setGithubUsername("testuser");
+        user.setGithubClaimed(true);
+        user.setFormalProfileCompleted(true);
+        user.setCreditScore(100);
+        user.setRole("user");
+        user.setStatus("active");
+        user.setUsername("testuser");
+        user.setPasswordHash("should_not_expose");
+        user.setCreatedAt(java.time.LocalDateTime.of(2026, 5, 25, 20, 13, 15));
+        user.setUpdatedAt(java.time.LocalDateTime.of(2026, 5, 25, 20, 13, 15));
+
+        when(profileService.getProfileById(TEST_USER_ID)).thenReturn(user);
+
+        // When
+        Result<ProfileDetailVO> result = profileController.getProfileDetail(validToken);
+
+        // Then: 验证成功
+        assertThat(result.isSuccess()).isTrue();
+        
+        // Then: 验证 VO 字段正确
+        ProfileDetailVO vo = result.getData();
+        assertThat(vo).isNotNull();
+        assertThat(vo.getId()).isEqualTo(1L);
+        assertThat(vo.getNickname()).isEqualTo("测试用户");
+        assertThat(vo.getAvatarUrl()).isEqualTo("http://avatar.url");
+        assertThat(vo.getEmail()).isEqualTo("test@test.com");
+        assertThat(vo.getEmailVerified()).isTrue();
+        assertThat(vo.getSchool()).isEqualTo("测试大学");
+        assertThat(vo.getMajor()).isEqualTo("计算机");
+        assertThat(vo.getGrade()).isEqualTo("2024");
+        assertThat(vo.getBio()).isEqualTo("个人简介");
+        assertThat(vo.getGithubUsername()).isEqualTo("testuser");
+        assertThat(vo.getGithubClaimed()).isTrue();
+        assertThat(vo.getFormalProfileCompleted()).isTrue();
+        assertThat(vo.getCreditScore()).isEqualTo(100);
+        assertThat(vo.getRole()).isEqualTo("user");
+        assertThat(vo.getStatus()).isEqualTo("active");
+        assertThat(vo.getUsername()).isEqualTo("testuser");
+        assertThat(vo.getCreatedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 5, 25, 20, 13, 15));
+        assertThat(vo.getUpdatedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 5, 25, 20, 13, 15));
+
+        // Then: 验证敏感字段不在 VO 中（通过编译时类型安全保证）
+        // ProfileDetailVO 没有 getOpenid() / getPasswordHash() 方法，编译即不通过
+    }
+
+    @Test
+    @DisplayName("getProfileDetail - 用户不存在应返回 NOT_FOUND")
+    void getProfileDetail_userNotFound_shouldReturnNotFound() {
+        // Given
+        when(profileService.getProfileById(TEST_USER_ID)).thenReturn(null);
+
+        // When
+        Result<ProfileDetailVO> result = profileController.getProfileDetail(validToken);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.NOT_FOUND.getCode());
+    }
+
+    @Test
+    @DisplayName("getProfileDetail - 无效 token 应返回 M3000")
+    void getProfileDetail_invalidToken_shouldReturnM3000() {
+        // Given: 模拟无效 token，requireUserId 抛出 AuthenticationException(M3000)
+        doThrow(new com.teammatch.exception.AuthenticationException(ReasonCode.UNAUTHORIZED))
+            .when(authUtil).requireUserId(anyString());
+
+        // When
+        Result<ProfileDetailVO> result = profileController.getProfileDetail("invalid_token");
+
+        // Then
+        assertThat(result.isFail()).isTrue();
         assertThat(result.getCode()).isEqualTo(ReasonCode.UNAUTHORIZED.getCode());
     }
 }
