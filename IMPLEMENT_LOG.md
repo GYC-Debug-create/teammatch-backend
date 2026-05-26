@@ -1,5 +1,20 @@
 # IMPLEMENT_LOG
 
+## 2026-05-24 M5/M6 对齐：pending_review 不开放申诉
+
+**M5 结论**：`pending_review` 评价不开放用户申诉入口；代码逻辑无冲突；更新 V2.1 文档。
+
+**文档**：
+- `TeamMatch 系统详细设计文档` §6.7、§6.8、§7.4、§8.8.2：冻结申诉入口规则；D-11/D-13 P0 不实现
+- `M6_API_Documentation.md`：申诉规则与已知缺口同步
+
+**代码**（与文档一致）：
+- `AppealServiceImpl`：仅 `status=normal` 可申诉；按 `uk_appeal_target_user` 拦截重复申诉
+- `ReportAdminController`：区分 NOT_FOUND / PARAM_ERROR / STATUS_CONFLICT
+- `AppealMapper.selectByTargetAndUser` + 相关单测
+
+---
+
 ## 2026-05-24 M6 联调收尾（master 对齐）
 
 **背景：** master 已合入 M5-9 评价复核（`6b32911`）及 M6 治理闭环（`44969c1`）。Jenkins 远程已配置，部署脚本暂不做。
@@ -25,7 +40,7 @@
 | 对象 | 事项 |
 |------|------|
 | **M2** | 拿更新后的 `M6_API_Documentation.md` 联调；举报处理页需支持 `createPenalty` 等字段 |
-| **M5** | D-11/D-13 复核↔申诉级联是否 P0、谁实现 |
+| **M5** | ~~D-11/D-13~~ 已对齐：pending_review 不开放申诉，P0 不实现级联 |
 | **M3** | M6 写 `user.credit_score` / `user.status` 跨模块是否 OK；预置 admin 账号可用 |
 | **产品/全组** | 信誉分下限规则 |
 

@@ -117,6 +117,7 @@ class AppealServiceTest {
         evaluation.setTaskScore(2);
         evaluation.setSkillScore(2);
         evaluation.setResponsibilityScore(2);
+        evaluation.setStatus(Evaluation.STATUS_NORMAL);
 
         activePenalty = new Penalty();
         activePenalty.setId(PENALTY_ID);
@@ -132,7 +133,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 正常创建evaluation类型申诉")
     void createAppeal_evaluation_success() {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
-        when(appealMapper.selectPendingByTarget("evaluation", EVALUATION_ID)).thenReturn(null);
+        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(null);
         when(appealMapper.insert(any(Appeal.class))).thenAnswer(invocation -> {
             Appeal appeal = invocation.getArgument(0);
             appeal.setId(APPEAL_ID);
@@ -156,10 +157,64 @@ class AppealServiceTest {
     }
 
     @Test
+    @DisplayName("createAppeal: pending_review评价不可申诉")
+    void createAppeal_evaluation_pendingReview_rejected() {
+        evaluation.setStatus(Evaluation.STATUS_PENDING_REVIEW);
+        when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
+
+        AppealCreateDTO dto = new AppealCreateDTO();
+        dto.setTargetType("evaluation");
+        dto.setTargetId(EVALUATION_ID);
+        dto.setReason("想申诉");
+
+        assertThatThrownBy(() -> appealService.createAppeal(USER_ID, dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("待复核");
+
+        verify(appealMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("createAppeal: voided评价不可申诉")
+    void createAppeal_evaluation_voided_rejected() {
+        evaluation.setStatus(Evaluation.STATUS_VOIDED);
+        when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
+
+        AppealCreateDTO dto = new AppealCreateDTO();
+        dto.setTargetType("evaluation");
+        dto.setTargetId(EVALUATION_ID);
+        dto.setReason("想申诉");
+
+        assertThatThrownBy(() -> appealService.createAppeal(USER_ID, dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("该评价已裁定，无法申诉");
+
+        verify(appealMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("createAppeal: kept_no_credit评价不可申诉")
+    void createAppeal_evaluation_keptNoCredit_rejected() {
+        evaluation.setStatus(Evaluation.STATUS_KEPT_NO_CREDIT);
+        when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
+
+        AppealCreateDTO dto = new AppealCreateDTO();
+        dto.setTargetType("evaluation");
+        dto.setTargetId(EVALUATION_ID);
+        dto.setReason("想申诉");
+
+        assertThatThrownBy(() -> appealService.createAppeal(USER_ID, dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("该评价已裁定，无法申诉");
+
+        verify(appealMapper, never()).insert(any());
+    }
+
+    @Test
     @DisplayName("createAppeal: 正常创建penalty类型申诉")
     void createAppeal_penalty_success() {
         when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
-        when(appealMapper.selectPendingByTarget("penalty", PENALTY_ID)).thenReturn(null);
+        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(null);
         when(appealMapper.insert(any(Appeal.class))).thenAnswer(invocation -> {
             Appeal appeal = invocation.getArgument(0);
             appeal.setId(APPEAL_ID);
@@ -230,7 +285,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 已存在待处理申诉抛出异常")
     void createAppeal_duplicatePending_throws() {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
-        when(appealMapper.selectPendingByTarget("evaluation", EVALUATION_ID)).thenReturn(pendingAppeal);
+        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(pendingAppeal);
 
         AppealCreateDTO dto = new AppealCreateDTO();
         dto.setTargetType("evaluation");
@@ -240,6 +295,26 @@ class AppealServiceTest {
         assertThatThrownBy(() -> appealService.createAppeal(USER_ID, dto))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("该目标已存在待处理的申诉");
+
+        verify(appealMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("createAppeal: 已驳回申诉不可重复提交")
+    void createAppeal_duplicateRejected_throws() {
+        when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
+        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(rejectedAppeal);
+
+        AppealCreateDTO dto = new AppealCreateDTO();
+        dto.setTargetType("evaluation");
+        dto.setTargetId(EVALUATION_ID);
+        dto.setReason("再次申诉");
+
+        assertThatThrownBy(() -> appealService.createAppeal(USER_ID, dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("该目标已提交过申诉，请勿重复提交");
+
+        verify(appealMapper, never()).insert(any());
     }
 
     @Test

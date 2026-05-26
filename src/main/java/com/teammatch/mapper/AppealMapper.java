@@ -39,4 +39,12 @@ public interface AppealMapper extends BaseMapper<Appeal> {
      */
     @Select("SELECT * FROM appeal WHERE target_type = #{targetType} AND target_id = #{targetId} AND status = 'pending' LIMIT 1")
     Appeal selectPendingByTarget(@Param("targetType") String targetType, @Param("targetId") Long targetId);
+
+    /**
+     * 查询用户对指定目标是否已有申诉（含 pending/approved/rejected，对应 uk_appeal_target_user）
+     */
+    @Select("SELECT * FROM appeal WHERE target_type = #{targetType} AND target_id = #{targetId} AND user_id = #{userId} LIMIT 1")
+    Appeal selectByTargetAndUser(@Param("targetType") String targetType,
+                                 @Param("targetId") Long targetId,
+                                 @Param("userId") Long userId);
 }
