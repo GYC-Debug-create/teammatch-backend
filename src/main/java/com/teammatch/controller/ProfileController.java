@@ -36,6 +36,29 @@ public class ProfileController {
     private AuthUtil authUtil;
 
     /**
+     * 获取指定用户的档案详情（供项目详情页显示队长/成员名称）
+     * 路径: GET /api/profile/detail/{userId}
+     * 需登录认证
+     */
+    @GetMapping("/detail/{userId}")
+    public Result<ProfileDetailVO> getUserProfile(@PathVariable Long userId,
+                                                  @RequestHeader("Authorization") String token) {
+        try {
+            // 必须登录
+            authUtil.requireUserId(token);
+            
+            User profile = profileService.getProfileById(userId);
+            if (profile == null) {
+                return Result.fail(com.teammatch.common.ReasonCode.NOT_FOUND);
+            }
+            // 转换为 VO，只暴露安全字段
+            return Result.success(ProfileDetailVO.from(profile));
+        } catch (com.teammatch.exception.AuthenticationException e) {
+            return Result.fail(e.getReasonCode());
+        }
+    }
+
+    /**
      * 获取当前用户档案详情
      * 路径: GET /api/profile/detail
      * 
