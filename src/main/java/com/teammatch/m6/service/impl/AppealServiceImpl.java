@@ -51,10 +51,14 @@ public class AppealServiceImpl implements AppealService {
         // 校验目标是否存在且属于当前用户
         validateTargetExistsAndBelongsToUser(dto.getTargetType(), dto.getTargetId(), userId);
 
-        // 检查是否已存在待处理的申诉
-        Appeal existingPending = appealMapper.selectPendingByTarget(dto.getTargetType(), dto.getTargetId());
-        if (existingPending != null) {
-            throw new IllegalStateException("该目标已存在待处理的申诉，请勿重复提交");
+        // 同一用户对同一目标仅允许一条申诉（V2.1 §7.4 uk_appeal_target_user）
+        Appeal existingAppeal = appealMapper.selectByTargetAndUser(
+                dto.getTargetType(), dto.getTargetId(), userId);
+        if (existingAppeal != null) {
+            if ("pending".equals(existingAppeal.getStatus())) {
+                throw new IllegalStateException("该目标已存在待处理的申诉，请勿重复提交");
+            }
+            throw new IllegalStateException("该目标已提交过申诉，请勿重复提交");
         }
 
         // 创建申诉实体
@@ -87,6 +91,18 @@ public class AppealServiceImpl implements AppealService {
             // 申诉用户必须是评价的被评价人
             if (!evaluation.getTargetId().equals(userId)) {
                 throw new IllegalArgumentException("只能对自己的评价提交申诉");
+            }
+            // V2.1 §6.7 / §7.4：仅 status=normal 可申诉；pending_review 走管理端复核
+            if (Evaluation.STATUS_PENDING_REVIEW.equals(evaluation.getStatus())) {
+                throw new IllegalStateException("待复核中的评价暂不可申诉，请等待管理员复核结果");
+            }
+            if (Evaluation.STATUS_VOIDED.equals(evaluation.getStatus())
+                    || Evaluation.STATUS_KEPT_NO_CREDIT.equals(evaluation.getStatus())) {
+                throw new IllegalStateException("该评价已裁定，无法申诉");
+            }
+            // 拒绝未知/非 normal 状态（脏数据或后续新增状态），已知四种常量在上文已分支
+            if (!Evaluation.STATUS_NORMAL.equals(evaluation.getStatus())) {
+                throw new IllegalStateException("仅可对已生效的正常评价提交申诉");
             }
         } else if ("penalty".equals(targetType)) {
             com.teammatch.m6.entity.Penalty penalty = penaltyMapper.selectById(targetId);

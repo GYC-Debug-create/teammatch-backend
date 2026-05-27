@@ -8,6 +8,7 @@ import com.teammatch.m6.service.ReportService;
 import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/reports")
 @RequiredArgsConstructor
+@Slf4j
 public class ReportAdminController {
 
     private final ReportService reportService;
@@ -71,9 +73,17 @@ public class ReportAdminController {
             Report report = reportService.handleReport(id, handlerId, dto);
             return Result.success(report);
         } catch (IllegalArgumentException e) {
-            return Result.fail(ReasonCode.NOT_FOUND);
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("举报不存在")) {
+                return Result.fail(ReasonCode.NOT_FOUND);
+            }
+            return Result.of(ReasonCode.PARAM_ERROR.getCode(), msg != null ? msg : ReasonCode.PARAM_ERROR.getMessage(), null);
         } catch (IllegalStateException e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return Result.of(ReasonCode.STATUS_CONFLICT.getCode(),
+                    e.getMessage() != null ? e.getMessage() : ReasonCode.STATUS_CONFLICT.getMessage(), null);
+        } catch (RuntimeException e) {
+            log.error("handleReport failed, reportId={}, handlerId={}", id, handlerId, e);
+            return Result.fail(ReasonCode.UNKNOWN_ERROR);
         }
     }
 }

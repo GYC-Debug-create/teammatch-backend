@@ -18,6 +18,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,9 +80,38 @@ class ReportAdminControllerTest {
         resolvedReport.setHandleResult("已处理");
 
         lenient().when(authUtil.requireUserId(ADMIN_TOKEN)).thenReturn(HANDLER_ID);
+        lenient().doNothing().when(authUtil).requireAdmin(ADMIN_TOKEN);
+    }
+
+    private ReportHandleDTO validHandleDto() {
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        return dto;
+    }
+
+    private ResultActions performHandleReport(Long reportId, ReportHandleDTO dto) throws Exception {
+        return mockMvc.perform(put("/admin/reports/{id}/handle", reportId)
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk());
     }
 
     // ==================== 权限校验 ====================
+
+    @Test
+    @DisplayName("getReportList: Token无效返回UNAUTHORIZED")
+    void getReportList_invalidToken_returnsUnauthorized() throws Exception {
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
+
+        mockMvc.perform(get("/admin/reports")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
+
+        verify(reportService, never()).getReportList(any());
+    }
 
     @Test
     @DisplayName("getReportList: 非管理员访问返回403")
@@ -95,6 +125,20 @@ class ReportAdminControllerTest {
                 .andExpect(jsonPath("$.code").value(ReasonCode.ADMIN_REQUIRED.getCode()));
 
         verify(reportService, never()).getReportList(any());
+    }
+
+    @Test
+    @DisplayName("getReport: Token无效返回UNAUTHORIZED")
+    void getReport_invalidToken_returnsUnauthorized() throws Exception {
+        doThrow(new AuthenticationException(ReasonCode.UNAUTHORIZED))
+                .when(authUtil).requireAdmin("Bearer invalid-token");
+
+        mockMvc.perform(get("/admin/reports/1")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
+
+        verify(reportService, never()).getReportById(any());
     }
 
     @Test
@@ -392,19 +436,75 @@ class ReportAdminControllerTest {
     }
 
     @Test
-    @DisplayName("handleReport: 重复处理返回STATUS_CONFLICT")
-    void handleReport_alreadyHandled() throws Exception {
+    @DisplayName("handleReport: IllegalArgumentException 返回 PARAM_ERROR")
+    void handleReport_paramError_returnsParamError() throws Exception {
         when(reportService.handleReport(any(), any(), any()))
-                .thenThrow(new IllegalStateException("举报已处理"));
+                .thenThrow(new IllegalArgumentException("仅 user 类型举报可联动创建处罚"));
 
         ReportHandleDTO dto = new ReportHandleDTO();
         dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
 
         mockMvc.perform(put("/admin/reports/1/handle")
                         .header("Authorization", ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value("仅 user 类型举报可联动创建处罚"));
+    }
+
+    @Test
+    @DisplayName("handleReport: 重复处理返回STATUS_CONFLICT")
+    void handleReport_alreadyHandled() throws Exception {
+        when(reportService.handleReport(any(), any(), any()))
+                .thenThrow(new IllegalStateException("举报已处理"));
+
+        performHandleReport(1L, validHandleDto())
+                .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()))
+                .andExpect(jsonPath("$.message").value("举报已处理"));
+    }
+
+    @Test
+    @DisplayName("handleReport: IllegalArgumentException 无 message 时返回默认 PARAM_ERROR 文案")
+    void handleReport_illegalArgumentNullMessage_returnsDefaultParamError() throws Exception {
+        when(reportService.handleReport(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException());
+
+        performHandleReport(1L, validHandleDto())
+                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value(ReasonCode.PARAM_ERROR.getMessage()));
+    }
+
+    @Test
+    @DisplayName("handleReport: IllegalArgumentException 含「举报不存在」子串返回 NOT_FOUND")
+    void handleReport_illegalArgumentReportNotExistPhrase_returnsNotFound() throws Exception {
+        when(reportService.handleReport(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("举报不存在: 42"));
+
+        performHandleReport(42L, validHandleDto())
+                .andExpect(jsonPath("$.code").value(ReasonCode.NOT_FOUND.getCode()));
+    }
+
+    @Test
+    @DisplayName("handleReport: IllegalStateException 无 message 时返回默认 STATUS_CONFLICT 文案")
+    void handleReport_illegalStateNullMessage_returnsDefaultStatusConflict() throws Exception {
+        when(reportService.handleReport(any(), any(), any()))
+                .thenThrow(new IllegalStateException());
+
+        performHandleReport(1L, validHandleDto())
+                .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()))
+                .andExpect(jsonPath("$.message").value(ReasonCode.STATUS_CONFLICT.getMessage()));
+    }
+
+    @Test
+    @DisplayName("handleReport: 未预期 RuntimeException 返回 UNKNOWN_ERROR 且不暴露内部信息")
+    void handleReport_runtimeException_returnsUnknownError() throws Exception {
+        when(reportService.handleReport(any(), any(), any()))
+                .thenThrow(new RuntimeException("Cannot invoke \"foo\" because \"bar\" is null"));
+
+        performHandleReport(1L, validHandleDto())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNKNOWN_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value(ReasonCode.UNKNOWN_ERROR.getMessage()));
     }
 }

@@ -16,7 +16,8 @@ M6 负责 TeamMatch 平台**治理闭环**：板块分类、举报、处罚、�
 
 **业务边界（P0 冻结）**：
 - 举报对象仅 `user` / `project`，**不能**举报 evaluation
-- 对互评不满 → 用户走 `appeal(targetType=evaluation)`；管理员走评价复核
+- **pending_review 评价不开放用户申诉**；待复核由管理员走评价复核（#24–#25）
+- 仅 **normal**（已计分）评价可对 `evaluation` 发起申诉；**M2/M1 小程序「我收到的互评」页**对 `pending_review` **不展示申诉按钮**（可展示「待复核」标签）
 - 退出投票结果不可申诉
 
 ---
@@ -424,7 +425,8 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 | 规则 | 说明 |
 |------|------|
 | targetType | `evaluation`（必须是该评价的被评价人）/ `penalty`（必须是被处罚人） |
-| 唯一性 | 同一 target 不能存在 `status=pending` 的申诉 |
+| evaluation 状态 | **仅 `status=normal` 可申诉**；`pending_review` 不开放（等管理员复核）；`voided`/`kept_no_credit` 不可申诉 |
+| 唯一性 | 同一用户对同一目标**终身仅一条申诉**（含已驳回，与 `uk_appeal_target_user` 一致） |
 | 已撤销处罚 | 不可对 `revoked` 处罚申诉 |
 
 **错误**：M1001、M1003（重复申诉 / 已撤销处罚）
@@ -555,7 +557,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 | 举报处理 | #9–#11 | 列表按 status 筛选；处理表单需支持 `createPenalty` 联动 |
 | 处罚管理 | #14–#17 | 创建 / 列表 / 详情 / 撤销（无编辑） |
 | 申诉审批 | #21–#23 | 按 targetType 区分 evaluation / penalty |
-| 评价复核 | #24–#25 | 三种 action；列表展示 evaluatorId |
+| 评价复核 | #24–#25 | 三种 action；列表展示 evaluatorId；**与 pending 申诉无并发（用户不可对 pending_review 申诉）** |
 
 **登录流程**：`POST /api/auth/login/password` → 取 `data.token` → 所有管理端请求带 `Authorization: Bearer {token}`
 
@@ -606,7 +608,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 | 项 | 说明 | 状态 |
 |----|------|------|
-| D-11/D-13 复核↔申诉级联 | 复核与 pending 申诉并发时的级联（设计 §8.8.2） | 未实现，M5/M6 协商 |
+| D-11/D-13 复核↔申诉级联 | P0 因 pending_review 不开放申诉，**无需实现**（已与 M5 对齐） |
 | 管理端信誉流水审计 | 用户端已有 M5 `GET /m5/credit/changes` | 管理端 API 未做 |
 | 信誉分下限 | 当前可扣至负值 | 待全组确认 |
 
