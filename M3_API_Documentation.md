@@ -562,7 +562,42 @@ Authorization: Bearer <管理员Token>
 - 若同名技能标签已存在，返回 `M3015` 错误
 
 ---
+#### 8. 获取用户完整档案
+**接口**: `GET /api/profile/detail`
 
+**说明**: 获取当前用户的档案。返回 `ProfileDetailVO`（VO），排除 `openid`、`passwordHash` 等敏感字段。
+
+**请求**: 需 Token
+
+**响应**:
+```json
+{
+    "code": "00000",
+    "message": "成功",
+    "data": {
+        "id": 1,
+        "nickname": "系统管理员",
+        "avatarUrl": null,
+        "email": "admin@teammatch.edu.cn",
+        "emailVerified": true,
+        "school": "TeamMatch大学",
+        "major": null,
+        "grade": null,
+        "bio": null,
+        "githubUsername": null,
+        "githubClaimed": false,
+        "formalProfileCompleted": true,
+        "creditScore": 100,
+        "role": "admin",
+        "status": "active",
+        "username": "admin",
+        "createdAt": "2026-05-25T20:13:15",
+        "updatedAt": "2026-05-25T20:13:15"
+    },
+    "fail": false,
+    "success": true
+}
+```
 ## 数据表结构
 
 ### user 表（用户表）

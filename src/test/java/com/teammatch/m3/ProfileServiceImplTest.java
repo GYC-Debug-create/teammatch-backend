@@ -370,4 +370,35 @@ class ProfileServiceImplTest {
         verify(userMapper).updateById(user);
         assertThat(user.getGithubUsername()).isEqualTo("new-username");
     }
+
+    // ==================== 获取用户档案 (getProfileById) ====================
+
+    @Test
+    @DisplayName("获取档案 - 用户存在应返回 User 实体")
+    void getProfileById_existingUser_shouldReturnUser() {
+        // Given: setUp 已经 mock 了 userMapper.selectById(TEST_USER_ID) 返回 baseUser
+
+        // When
+        User result = profileService.getProfileById(TEST_USER_ID);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(TEST_USER_ID);
+        verify(userMapper).selectById(TEST_USER_ID);
+    }
+
+    @Test
+    @DisplayName("获取档案 - 用户不存在应返回 null")
+    void getProfileById_userNotFound_shouldReturnNull() {
+        // Given
+        Long nonExistentUserId = 999L;
+        when(userMapper.selectById(nonExistentUserId)).thenReturn(null);
+
+        // When
+        User result = profileService.getProfileById(nonExistentUserId);
+
+        // Then
+        assertThat(result).isNull();
+        verify(userMapper).selectById(nonExistentUserId);
+    }
 }

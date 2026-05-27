@@ -2,6 +2,7 @@ package com.teammatch.controller;
 
 import com.teammatch.common.Result;
 import com.teammatch.dto.AddSkillTagRequest;
+import com.teammatch.dto.ProfileDetailVO;
 import com.teammatch.dto.UpdateProfileRequest;
 import com.teammatch.dto.UpdateUserSkillsRequest;
 import com.teammatch.entity.SkillTag;
@@ -33,6 +34,30 @@ public class ProfileController {
     
     @Autowired
     private AuthUtil authUtil;
+
+    /**
+     * 获取当前用户档案详情
+     * 路径: GET /api/profile/detail
+     * 
+     * 使用 ProfileDetailVO 而非直接返回 User 实体，避免暴露敏感字段（openid、passwordHash）
+     */
+    @GetMapping("/detail")
+    public Result<ProfileDetailVO> getProfileDetail(@RequestHeader("Authorization") String token) {
+        try {
+            // 必须登录
+            Long userId = authUtil.requireUserId(token);
+            
+            User profile = profileService.getProfileById(userId);
+            if (profile == null) {
+                return Result.fail(com.teammatch.common.ReasonCode.NOT_FOUND);
+            }
+            
+            // 转换为 VO，只暴露安全字段
+            return Result.success(ProfileDetailVO.from(profile));
+        } catch (com.teammatch.exception.AuthenticationException e) {
+            return Result.fail(e.getReasonCode());
+        }
+    }
 
     /**
      * D. 更新个人档案

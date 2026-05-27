@@ -35,6 +35,11 @@ public class ProfileServiceImpl implements ProfileService {
     private UserSkillMapper userSkillMapper;
 
     @Override
+    public User getProfileById(Long userId) {
+        return userMapper.selectById(userId);
+    }
+
+    @Override
     @Transactional
     public void updateProfile(Long userId, User profile) {
         User user = userMapper.selectById(userId);
