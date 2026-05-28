@@ -12,6 +12,8 @@ import com.teammatch.mapper.SkillTagMapper;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.mapper.UserSkillMapper;
 import com.teammatch.service.ProfileService;
+import com.teammatch.service.TechProfileService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 /**
  * M3 档案服务实现类
  */
+@Slf4j
 @Service
 public class ProfileServiceImpl implements ProfileService {
 
@@ -33,6 +36,9 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Autowired
     private UserSkillMapper userSkillMapper;
+
+    @Autowired
+    private TechProfileService techProfileService;
 
     @Override
     public User getProfileById(Long userId) {
@@ -67,6 +73,15 @@ public class ProfileServiceImpl implements ProfileService {
         user.setGithubUsername(githubUsername);
         user.setGithubClaimed(true);
         userMapper.updateById(user);
+
+        // 联动技术画像：搜索已有画像 → 有则认领 → 无则从 GitHub 生成并认领
+        try {
+            techProfileService.claimProfile(githubUsername, userId);
+            log.info("技术画像认领成功: userId={}, githubUsername={}", userId, githubUsername);
+        } catch (Exception e) {
+            log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
+            // 不阻断绑定流程，GitHub 绑定本身成功即可
+        }
     }
 
     @Override

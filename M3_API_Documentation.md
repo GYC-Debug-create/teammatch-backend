@@ -35,10 +35,49 @@ Authorization: Bearer <JWT Token>  (需要认证的接口)
 
 ### 一、认证模块 (`/auth`)
 
-#### 1. Mock 微信登录
+#### 1. 微信登录
 **接口**: `POST /api/auth/login`
 
-**说明**: 模拟微信登录，使用 code 作为 openid 识别用户。若用户不存在则自动创建。
+**说明**: 真实微信登录。前端调用 `wx.login()` 获取临时 code，后端通过微信 `code2session` 接口换取真实 `openid` 后识别用户。若用户不存在则自动创建。
+
+**请求 Body**:
+```json
+{
+  "code": "wx_code_from_wx_login"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": {
+    "id": 1,
+    "nickname": "User_xxxxx",
+    "avatarUrl": null,
+    "emailVerified": false,
+    "formalProfileCompleted": false,
+    "creditScore": 100,
+    "token": "<REDACTED>"
+  }
+}
+```
+
+**注意**:
+- 返回的是 `LoginResponse` DTO，不包含敏感字段（passwordHash、role、status等）
+- `session_key` 由微信返回但后端**不持久化**（仅用于可能的解密场景，本项目目前不需要）
+- `formalProfileCompleted` 表示正式档案是否完成（邮箱验证 + 昵称 + 学校）
+
+**错误码**:
+- `M3025` — 微信登录失败（code 无效/过期、微信服务器异常等）
+
+---
+
+#### 2. Mock 登录（开发测试用）
+**接口**: `POST /api/auth/login/mock`
+
+**说明**: 模拟微信登录，**不调微信接口**，直接把 code 当作 openid 识别用户。仅用于开发测试，生产环境不暴露。
 
 **请求 Body**:
 ```json
@@ -65,12 +104,12 @@ Authorization: Bearer <JWT Token>  (需要认证的接口)
 ```
 
 **注意**:
-- 返回的是 `LoginResponse` DTO，不包含敏感字段（passwordHash、role、status等）
-- `formalProfileCompleted` 表示正式档案是否完成（邮箱验证 + 昵称 + 学校）
+- 与微信登录返回结构相同，方便前端统一处理
+- **生产环境应删除此接口**或加 IP 白名单
 
 ---
 
-#### 2. 发送邮箱验证码
+#### 3. 发送邮箱验证码
 **接口**: `POST /api/auth/email/send`
 
 **说明**: 向指定邮箱发送验证码（当前为控制台打印，实际项目需接入邮件服务）。
@@ -98,7 +137,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 3. 验证邮箱验证码
+#### 4. 验证邮箱验证码
 **接口**: `POST /api/auth/email/verify`
 
 **说明**: 验证邮箱验证码并绑定邮箱到当前用户。
@@ -127,7 +166,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 4. 管理员创建用户密码
+#### 5. 管理员创建用户密码
 **接口**: `POST /api/auth/password/create`
 
 **说明**: 为新用户设置密码，若用户不存在则自动创建。**需要管理员权限**。
@@ -162,7 +201,7 @@ Authorization: Bearer <管理员Token>
 
 ---
 
-#### 5. 管理员修改用户密码
+#### 6. 管理员修改用户密码
 **接口**: `POST /api/auth/password/update`
 
 **说明**: 修改已有用户的密码，可选择验证旧密码。**需要管理员权限**。
@@ -197,7 +236,7 @@ Authorization: Bearer <管理员Token>
 
 ---
 
-#### 6. 用户首次绑定用户名
+#### 7. 用户首次绑定用户名
 **接口**: `POST /api/auth/username/bind`
 
 **说明**: 微信登录用户首次绑定用户名（之前未设置过 username）。
@@ -230,7 +269,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 7. 用户修改用户名
+#### 8. 用户修改用户名
 **接口**: `PUT /api/auth/username/update`
 
 **说明**: 已绑定用户名的用户修改自己的用户名。
@@ -258,7 +297,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 8. 密码登录
+#### 9. 密码登录
 **接口**: `POST /api/auth/login/password`
 
 **说明**: 使用用户名和密码进行登录。
@@ -296,7 +335,7 @@ Authorization: Bearer <Token>
 
 ---
 
-#### 9. 用户修改密码
+#### 10. 用户修改密码
 **接口**: `PUT /api/auth/password/change`
 
 **说明**: 用户自主修改自己的密码，需要验证旧密码。
@@ -423,6 +462,134 @@ Authorization: Bearer <Token>
 **业务规则**:
 - 若用户未绑定过 GitHub，返回 `M3012` 错误
 - 必须先调用 `POST /api/profile/github/bind` 完成首次绑定
+- 绑定 GitHub 时自动触发技术画像认领流程（搜索已有画像 → 有则认领 → 无则从 GitHub API 生成）
+
+---
+
+#### 3.1 获取当前用户技术画像
+**接口**: `GET /api/profile/tech-profile`
+
+**说明**: 获取当前登录用户的技术画像（基于 GitHub 数据分析），包含技术评分和语言分布等。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": {
+    "id": 1,
+    "githubUsername": "zhangsan-github",
+    "claimedByUserId": 2,
+    "claimedByUserNickname": "张三",
+    "totalStars": 245,
+    "totalRepos": 12,
+    "totalCommits": 1523,
+    "totalPrs": 38,
+    "totalContributions": 450,
+    "topLanguages": "[\"Java\",\"Python\",\"TypeScript\"]",
+    "techScore": 5128,
+    "bio": "Full-stack developer",
+    "avatarUrl": "https://avatars.githubusercontent.com/u/zhangsan",
+    "lastSyncedAt": "2025-01-15T10:30:00",
+    "claimed": true
+  }
+}
+```
+
+**错误码**:
+- `M3026` — 技术画像不存在，请先绑定 GitHub 账号
+
+---
+
+#### 3.2 获取指定用户技术画像
+**接口**: `GET /api/profile/tech-profile/{userId}`
+
+**说明**: 获取指定用户的技术画像，无需登录。
+
+**路径参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| userId | Long | 用户 ID |
+
+**响应**: 同上 `TechProfileVO` 结构
+
+**错误码**:
+- `M3026` — 技术画像不存在
+
+---
+
+### 排行榜接口（板块二 冷启动）
+
+#### 1. 获取排行榜
+**接口**: `GET /api/leaderboard?page=1&size=20`
+
+**说明**: 按技术评分（techScore）降序排列，展示所有技术画像的排名。未认领的画像也会展示（不含用户信息）。
+
+**请求参数**:
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| page | int | 1 | 页码（从 1 开始） |
+| size | int | 20 | 每页条数（1~100） |
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": [
+    {
+      "rank": 1,
+      "userId": 2,
+      "nickname": "张三",
+      "avatarUrl": "https://...",
+      "school": "清华大学",
+      "githubUsername": "zhangsan-github",
+      "techScore": 5128,
+      "totalStars": 245,
+      "totalRepos": 12,
+      "totalCommits": 1523,
+      "totalPrs": 38,
+      "totalContributions": 450,
+      "topLanguages": "[\"Java\",\"Python\",\"TypeScript\"]",
+      "bio": "Full-stack developer",
+      "claimed": true
+    },
+    {
+      "rank": 2,
+      "userId": null,
+      "nickname": null,
+      "githubUsername": "torvalds",
+      "techScore": 10000000,
+      "totalStars": 999999,
+      "claim": false
+    }
+  ]
+}
+```
+
+**技术评分公式**:
+```
+techScore = totalStars × 10 + totalCommits × 2 + totalPRs × 5 + totalRepos × 3 + totalContributions × 1
+```
+
+---
+
+#### 2. 获取排行榜总数
+**接口**: `GET /api/leaderboard/count`
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": 5
+}
+```
 
 ---
 
@@ -696,11 +863,12 @@ Authorization: Bearer <管理员Token>
 
 ### 场景一：微信登录用户完整流程
 
-1. **登录获取 Token**
+1. **登录获取 Token（开发测试用 Mock 登录）**
    ```bash
-   POST /api/auth/login
+   POST /api/auth/login/mock
    Body: { "code": "test_openid_123" }
    ```
+   > 生产环境使用 `POST /api/auth/login` 走真实微信登录
 
 2. **绑定邮箱**
    ```bash
@@ -809,7 +977,9 @@ Authorization: Bearer <管理员Token>
 | M3013 | 用户名或密码错误 | 密码登录时凭证错误 |
 | M3014 | 该用户未设置密码 | 未设置密码的用户尝试密码登录 |
 | M3015 | 技能标签已存在 | 添加同名技能标签时重复 |
-| M3015 | 技能标签已存在 | 添加同名技能标签时重复 |
+| M3025 | 微信登录失败，请重试 | code 无效/过期、微信服务器异常等 |
+| M3026 | 技术画像不存在，请先绑定 GitHub 账号 | 用户未认领技术画像或未绑定 GitHub |
+| M3027 | 该 GitHub 账号已被其他用户认领 | 尝试认领已被他人认领的 GitHub 账号 |
 
 ---
 

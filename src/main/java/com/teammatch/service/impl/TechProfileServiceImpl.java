@@ -1,0 +1,194 @@
+package com.teammatch.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.teammatch.dto.LeaderboardEntryVO;
+import com.teammatch.dto.TechProfileVO;
+import com.teammatch.entity.TechProfile;
+import com.teammatch.entity.User;
+import com.teammatch.mapper.TechProfileMapper;
+import com.teammatch.mapper.UserMapper;
+import com.teammatch.service.TechProfileService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.*;
+
+/**
+ * M3 技术画像服务实现
+ * 通过 GitHub REST API (unauthenticated) 获取用户公开仓库数据，
+ * 计算综合技术评分，支撑冷启动排行榜。
+ */
+@Slf4j
+@Service
+public class TechProfileServiceImpl implements TechProfileService {
+
+    @Autowired
+    private TechProfileMapper techProfileMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private GitHubSyncService gitHubSyncService;
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Override
+    @Transactional
+    public TechProfile generateOrUpdateProfile(String githubUsername) {
+        // 1. 查询是否已存在
+        LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        TechProfile existing = techProfileMapper.selectOne(wrapper);
+
+        if (existing != null) {
+            // 已有记录：异步同步 GitHub 数据
+            existing.setSyncStatus("pending");
+            techProfileMapper.updateById(existing);
+            log.info("触发技术画像异步同步: githubUsername={}", githubUsername);
+            gitHubSyncService.syncGitHubDataAsync(existing.getId(), githubUsername);
+            return existing;
+        }
+
+        // 2. 新记录：先创建占位数据，避免并发重复创建
+        TechProfile profile = new TechProfile();
+        profile.setGithubUsername(githubUsername);
+        profile.setSyncStatus("pending");
+        profile.setTotalStars(0);
+        profile.setTotalRepos(0);
+        profile.setTotalCommits(0);
+        profile.setTotalPrs(0);
+        profile.setTotalContributions(0);
+        profile.setTopLanguages("[]");
+        profile.setTechScore(0);
+        profile.setLastSyncedAt(null);
+
+        try {
+            techProfileMapper.insert(profile);
+            log.info("创建技术画像占位: githubUsername={}, id={}", githubUsername, profile.getId());
+
+            // 异步拉取 GitHub 数据
+            gitHubSyncService.syncGitHubDataAsync(profile.getId(), githubUsername);
+        } catch (DuplicateKeyException e) {
+            // 并发下另一个线程已创建，查询已存在的记录
+            LambdaQueryWrapper<TechProfile> retryWrapper = new LambdaQueryWrapper<>();
+            retryWrapper.eq(TechProfile::getGithubUsername, githubUsername);
+            profile = techProfileMapper.selectOne(retryWrapper);
+            log.info("技术画像已存在（并发场景）: githubUsername={}", githubUsername);
+        }
+
+        return profile;
+    }
+
+    // syncGitHubDataAsync 已移至 GitHubSyncService，确保 @Async 通过 AOP 代理生效
+
+    @Override
+    @Transactional
+    public TechProfile claimProfile(String githubUsername, Long userId) {
+        // 1. 查找或生成技术画像
+        LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        TechProfile profile = techProfileMapper.selectOne(wrapper);
+
+        if (profile == null) {
+            // 没有则从 GitHub 生成
+            profile = generateOrUpdateProfile(githubUsername);
+        }
+
+        // 2. 检查是否已被其他人认领
+        if (profile.isClaimed() && !profile.getClaimedByUserId().equals(userId)) {
+            throw new RuntimeException("该 GitHub 账号已被其他用户认领");
+        }
+
+        // 3. 认领
+        if (!profile.isClaimed()) {
+            profile.setClaimedByUserId(userId);
+            techProfileMapper.updateById(profile);
+        }
+
+        // 4. 更新 user 表的 tech_profile_id 外键
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setTechProfileId(profile.getId());
+            userMapper.updateById(user);
+        }
+
+        return profile;
+    }
+
+    @Override
+    public TechProfileVO getProfileByUserId(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getTechProfileId() == null) return null;
+
+        TechProfile profile = techProfileMapper.selectById(user.getTechProfileId());
+        if (profile == null) return null;
+
+        TechProfileVO vo = TechProfileVO.from(profile);
+        vo.setClaimedByUserNickname(user.getNickname());
+        return vo;
+    }
+
+    @Override
+    public List<LeaderboardEntryVO> getLeaderboard(int page, int size) {
+        // 按 tech_score 降序分页查询
+        LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(TechProfile::getTechScore);
+
+        Page<TechProfile> pageObj = new Page<>(page, size);
+        Page<TechProfile> result = techProfileMapper.selectPage(pageObj, wrapper);
+
+        List<TechProfile> profiles = result.getRecords();
+
+        // 构建排行榜，附加上用户信息
+        int rankBase = (page - 1) * size;
+        List<LeaderboardEntryVO> entries = new ArrayList<>();
+        for (int i = 0; i < profiles.size(); i++) {
+            TechProfile profile = profiles.get(i);
+            LeaderboardEntryVO entry = new LeaderboardEntryVO();
+            entry.setRank(rankBase + i + 1);
+            entry.setGithubUsername(profile.getGithubUsername());
+            entry.setTechScore(profile.getTechScore());
+            entry.setTotalStars(profile.getTotalStars());
+            entry.setTotalRepos(profile.getTotalRepos());
+            entry.setTotalCommits(profile.getTotalCommits());
+            entry.setTotalPrs(profile.getTotalPrs());
+            entry.setTotalContributions(profile.getTotalContributions());
+            entry.setTopLanguages(profile.getTopLanguages());
+            entry.setBio(profile.getBio());
+            entry.setClaimed(profile.isClaimed());
+
+            // 如果已认领，附加用户信息
+            if (profile.isClaimed()) {
+                User user = userMapper.selectById(profile.getClaimedByUserId());
+                if (user != null) {
+                    entry.setUserId(user.getId());
+                    entry.setNickname(user.getNickname());
+                    entry.setAvatarUrl(user.getAvatarUrl());
+                    entry.setSchool(user.getSchool());
+                }
+            }
+
+            entries.add(entry);
+        }
+
+        return entries;
+    }
+
+    @Override
+    public long getLeaderboardCount() {
+        return techProfileMapper.selectCount(null);
+    }
+
+    // fetchGitHubData / fetchGitHubUser / fetchGitHubRepos 已移至 GitHubSyncService
+}

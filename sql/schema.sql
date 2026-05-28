@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `username` VARCHAR(64) NULL COMMENT 'Admin username',
   `password_hash` VARCHAR(255) NULL COMMENT 'Admin password hash',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  `tech_profile_id` BIGINT NULL COMMENT 'Linked tech profile id',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_openid` (`openid`),
@@ -39,10 +40,35 @@ CREATE TABLE IF NOT EXISTS `user` (
   KEY `idx_user_status` (`status`),
   KEY `idx_user_role` (`role`),
   KEY `idx_user_formal_profile` (`formal_profile_completed`),
-  KEY `idx_user_github_username` (`github_username`)
+  KEY `idx_user_github_username` (`github_username`),
+  KEY `idx_user_tech_profile` (`tech_profile_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 user authentication and profile base';
 
--- 2. skill_tag: M3 preset skill dictionary.
+-- 2. tech_profile: M3 tech profile from GitHub analysis for cold-start leaderboard.
+CREATE TABLE IF NOT EXISTS `tech_profile` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `github_username` VARCHAR(64) NOT NULL COMMENT 'GitHub username',
+  `claimed_by_user_id` BIGINT NULL COMMENT 'The user who claimed this profile, NULL if unclaimed',
+  `total_stars` INT NOT NULL DEFAULT 0 COMMENT 'Total GitHub stars across all repos',
+  `total_repos` INT NOT NULL DEFAULT 0 COMMENT 'Total public repositories',
+  `total_commits` INT NOT NULL DEFAULT 0 COMMENT 'Total commits (approximate from repo stats)',
+  `total_prs` INT NOT NULL DEFAULT 0 COMMENT 'Total pull requests',
+  `total_contributions` INT NOT NULL DEFAULT 0 COMMENT 'Total contributions in the last year',
+  `top_languages` VARCHAR(500) NULL COMMENT 'Top programming languages, JSON array',
+  `tech_score` INT NOT NULL DEFAULT 0 COMMENT 'Computed tech score: stars*10+commits*2+prs*5+repos*3+contributions',
+  `bio` VARCHAR(500) NULL COMMENT 'GitHub profile bio',
+  `avatar_url` VARCHAR(512) NULL COMMENT 'GitHub avatar URL',
+  `sync_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Sync status: pending/synced/failed',
+  `last_synced_at` DATETIME NULL COMMENT 'Last time profile was synced from GitHub',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tech_profile_github_username` (`github_username`),
+  KEY `idx_tech_profile_claimed_user` (`claimed_by_user_id`),
+  KEY `idx_tech_profile_tech_score` (`tech_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 tech profile from GitHub analysis for cold-start leaderboard';
+
+-- 3. skill_tag: M3 preset skill dictionary (was #2).
 CREATE TABLE IF NOT EXISTS `skill_tag` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
   `name` VARCHAR(64) NOT NULL COMMENT 'Skill tag name',

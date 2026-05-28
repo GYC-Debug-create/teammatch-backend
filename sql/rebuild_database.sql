@@ -2,25 +2,25 @@
 -- TeamMatch 数据库重建脚本
 -- 用途：删除旧数据库，重建并插入示例数据
 -- 管理员账号：
---用户名：admin
---密码：<密码>
---OpenID：admin_openid_001
---普通用户账号：
+-- 用户名：admin
+-- 密码：<密码>
+-- OpenID：admin_openid_001
+-- 普通用户账号：
 -- 张三 - zhangsan / <密码> (完整资料，清华计算机)
 -- 李四 - lisi / <密码> (完整资料，北大软件工程)
 -- 王五 - wangwu (无密码，复旦AI研究生)
 -- 赵六 - zhaoliu (未完善资料)
 -- 孙七 - sunqi (被封禁状态)
---Mock 微信登录 Code：
+-- Mock 微信登录 Code：
 -- mock_wx_code_user_a → 张三
 -- mock_wx_code_user_b → 李四
 -- mock_wx_code_user_c → 王五
 -- mock_wx_code_user_d → 赵六
 -- mock_wx_code_user_e → 孙七
---# 先登录 MySQL
---mysql -u root -p
+-- # 先登录 MySQL
+-- mysql -u root -p
 # 然后在 MySQL 命令行中执行
---source d:/shixun12/backend/shixun12_backend/sql/rebuild_database.sql;
+-- source d:/shixun12/backend/shixun12_backend/sql/rebuild_database.sql;
 -- ============================================
 
 -- 1. 删除并重建数据库
@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `status` VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'Status: active/banned',
   `username` VARCHAR(64) NULL COMMENT 'Admin username',
   `password_hash` VARCHAR(255) NULL COMMENT 'Admin password hash',
+  `tech_profile_id` BIGINT NULL COMMENT 'Linked tech profile id',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
   PRIMARY KEY (`id`),
@@ -63,8 +64,33 @@ CREATE TABLE IF NOT EXISTS `user` (
   KEY `idx_user_status` (`status`),
   KEY `idx_user_role` (`role`),
   KEY `idx_user_formal_profile` (`formal_profile_completed`),
-  KEY `idx_user_github_username` (`github_username`)
+  KEY `idx_user_github_username` (`github_username`),
+  KEY `idx_user_tech_profile` (`tech_profile_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 user authentication and profile base';
+
+-- tech_profile 表
+CREATE TABLE IF NOT EXISTS `tech_profile` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `github_username` VARCHAR(64) NOT NULL COMMENT 'GitHub username',
+  `claimed_by_user_id` BIGINT NULL COMMENT 'The user who claimed this profile, NULL if unclaimed',
+  `total_stars` INT NOT NULL DEFAULT 0 COMMENT 'Total GitHub stars across all repos',
+  `total_repos` INT NOT NULL DEFAULT 0 COMMENT 'Total public repositories',
+  `total_commits` INT NOT NULL DEFAULT 0 COMMENT 'Total commits (approximate from repo stats)',
+  `total_prs` INT NOT NULL DEFAULT 0 COMMENT 'Total pull requests',
+  `total_contributions` INT NOT NULL DEFAULT 0 COMMENT 'Total contributions in the last year',
+  `top_languages` VARCHAR(500) NULL COMMENT 'Top programming languages, JSON array',
+  `tech_score` INT NOT NULL DEFAULT 0 COMMENT 'Computed tech score: stars*10+commits*2+prs*5+repos*3+contributions',
+  `bio` VARCHAR(500) NULL COMMENT 'GitHub profile bio',
+  `avatar_url` VARCHAR(512) NULL COMMENT 'GitHub avatar URL',
+  `sync_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Sync status: pending/synced/failed',
+  `last_synced_at` DATETIME NULL COMMENT 'Last time profile was synced from GitHub',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_tech_profile_github_username` (`github_username`),
+  KEY `idx_tech_profile_claimed_user` (`claimed_by_user_id`),
+  KEY `idx_tech_profile_tech_score` (`tech_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 tech profile from GitHub analysis for cold-start leaderboard';
 
 -- skill_tag 表
 CREATE TABLE IF NOT EXISTS `skill_tag` (
@@ -375,6 +401,19 @@ INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, 
 ('mock_wx_code_user_c', '王五', 'wangwu', NULL, 'wangwu@example.edu.cn', 1, '复旦大学', '人工智能', '2023级', 'AI方向研究生', 'wangwu-github', 1, 100, 1, 'active'),
 ('mock_wx_code_user_d', '赵六', 'zhaoliu', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, 100, 0, 'active'),
 ('mock_wx_code_user_e', '孙七', 'sunqi', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, 80, 0, 'banned');
+
+-- 3.2a 插入技术画像数据（供排行榜使用）
+INSERT INTO `tech_profile` (`github_username`, `claimed_by_user_id`, `total_stars`, `total_repos`, `total_commits`, `total_prs`, `total_contributions`, `top_languages`, `tech_score`, `bio`, `avatar_url`, `sync_status`, `last_synced_at`) VALUES
+('zhangsan-github', 2, 245, 12, 1523, 38, 450, '["Java","Python","TypeScript"]', (245*10+1523*2+38*5+12*3+450*1), 'Full-stack developer passionate about open source', 'https://avatars.githubusercontent.com/u/zhangsan', 'synced', NOW()),
+('lisi-github', 3, 780, 28, 3200, 85, 920, '["JavaScript","Vue.js","CSS","TypeScript"]', (780*10+3200*2+85*5+28*3+920*1), 'Frontend enthusiast & UI/UX lover', 'https://avatars.githubusercontent.com/u/lisi', 'synced', NOW()),
+('wangwu-github', 4, 120, 8, 890, 15, 310, '["Python","C++","CUDA"]', (120*10+890*2+15*5+8*3+310*1), 'AI researcher, open-source contributor', 'https://avatars.githubusercontent.com/u/wangwu', 'synced', NOW()),
+('torvalds', NULL, 999999, 6, 50000, 200, 9999, '["C","Assembly","Shell"]', (999999*10+50000*2+200*5+6*3+9999*1), 'Creator of Linux and Git', 'https://avatars.githubusercontent.com/u/1024025', 'synced', NOW()),
+('ruanyf', NULL, 15000, 45, 8000, 120, 3500, '["JavaScript","Markdown","CSS"]', (15000*10+8000*2+120*5+45*3+3500*1), 'Blogger, author, open-source evangelist', 'https://avatars.githubusercontent.com/u/905434', 'synced', NOW());
+
+-- 3.2b 更新用户关联技术画像
+UPDATE `user` SET `tech_profile_id` = 1 WHERE `id` = 2;
+UPDATE `user` SET `tech_profile_id` = 2 WHERE `id` = 3;
+UPDATE `user` SET `tech_profile_id` = 3 WHERE `id` = 4;
 
 -- 3.3 插入技能标签
 INSERT INTO `skill_tag` (`name`, `category`, `status`) VALUES

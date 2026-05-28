@@ -19,6 +19,7 @@ import com.teammatch.exception.ValidationException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.impl.AuthServiceImpl;
 import io.jsonwebtoken.Jwts;
+import org.springframework.core.env.Environment;
 import io.jsonwebtoken.SignatureAlgorithm;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

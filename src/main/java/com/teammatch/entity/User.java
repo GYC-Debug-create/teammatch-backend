@@ -74,6 +74,9 @@ public class User {
     /** 创建时间 */
     private LocalDateTime createdAt;
 
+    /** 关联的技术画像 ID（外键 → tech_profile.id） */
+    private Long techProfileId;
+
     /** 更新时间 */
     private LocalDateTime updatedAt;
 
@@ -113,6 +116,8 @@ public class User {
     public void setUsername(String username) { this.username = username; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public Long getTechProfileId() { return techProfileId; }
+    public void setTechProfileId(Long techProfileId) { this.techProfileId = techProfileId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
