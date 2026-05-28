@@ -14,7 +14,15 @@ import com.teammatch.entity.User;
 public interface AuthService {
 
     /**
-     * 微信 Mock 登录
+     * 微信登录
+     * 通过 wx.login() 返回的 code 调用微信 code2session 接口，
+     * 获取真实 openid 后进行用户查找或创建。
+     */
+    User wechatLogin(LoginRequest request);
+
+    /**
+     * Mock 登录（仅开发测试用）
+     * 直接把 code 当作 openid 查找或创建用户，不调微信接口
      */
     User mockLogin(LoginRequest request);
 

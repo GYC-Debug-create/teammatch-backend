@@ -27,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.Date;
@@ -48,6 +49,9 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private Environment environment;
+
     @InjectMocks
     private AuthController authController;
 
@@ -67,7 +71,7 @@ class AuthControllerTest {
     @DisplayName("login - 成功登录应返回 LoginResponse")
     void login_shouldReturnLoginResponse() {
         LoginRequest request = new LoginRequest();
-        request.setCode("mock-openid-123");
+        request.setCode("wx-code-123");
 
         User user = new User();
         user.setId(TEST_USER_ID);
@@ -77,7 +81,7 @@ class AuthControllerTest {
         user.setFormalProfileCompleted(true);
         user.setCreditScore(100);
 
-        when(authService.mockLogin(request)).thenReturn(user);
+        when(authService.wechatLogin(request)).thenReturn(user);
         when(authService.generateToken(user)).thenReturn("test-token");
 
         Result<LoginResponse> result = authController.login(request);
@@ -86,6 +90,29 @@ class AuthControllerTest {
         assertThat(result.getData()).isNotNull();
         assertThat(result.getData().getId()).isEqualTo(TEST_USER_ID);
         assertThat(result.getData().getToken()).isEqualTo("test-token");
+    }
+
+    @Test
+    @DisplayName("mockLogin - Mock登录应返回 LoginResponse")
+    void mockLogin_shouldReturnLoginResponse() {
+        LoginRequest request = new LoginRequest();
+        request.setCode("mock-openid-123");
+
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setNickname("MockUser");
+        user.setCreditScore(100);
+
+        when(environment.getActiveProfiles()).thenReturn(new String[]{"local"});
+        when(authService.mockLogin(request)).thenReturn(user);
+        when(authService.generateToken(user)).thenReturn("mock-token");
+
+        Result<LoginResponse> result = authController.mockLogin(request);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getData()).isNotNull();
+        assertThat(result.getData().getId()).isEqualTo(TEST_USER_ID);
+        assertThat(result.getData().getToken()).isEqualTo("mock-token");
     }
 
     @Test

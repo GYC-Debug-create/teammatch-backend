@@ -1,7 +1,9 @@
 package com.teammatch.m3;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
+import com.teammatch.config.WeChatProperties;
 import com.teammatch.dto.LoginRequest;
 import com.teammatch.dto.PasswordLoginRequest;
 import com.teammatch.dto.PasswordRequest;
@@ -29,12 +31,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.*;
 
@@ -62,14 +69,24 @@ class AuthServiceImplTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private RestTemplate restTemplate;
+
+    @Mock
+    private WeChatProperties weChatProperties;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
+    private ObjectMapper objectMapper = new ObjectMapper();
     private BCryptPasswordEncoder passwordEncoder;
     private String validToken;
 
     @BeforeEach
     void setUp() {
+        // 真实 ObjectMapper（用于解析微信 code2session JSON 响应）
+        org.springframework.test.util.ReflectionTestUtils.setField(authService, "objectMapper", new ObjectMapper());
+        
         passwordEncoder = new BCryptPasswordEncoder();
         // 生成一个有效的测试 Token
         validToken = Jwts.builder()
@@ -78,6 +95,10 @@ class AuthServiceImplTest {
                 .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
                 .signWith(SignatureAlgorithm.HS256, JWT_SECRET)
                 .compact();
+
+        // 配置 WeChatProperties mock（被 @InjectMocks 注入，设置默认返回值避免 NPE）
+        lenient().when(weChatProperties.getAppId()).thenReturn("mock-appid");
+        lenient().when(weChatProperties.getSecret()).thenReturn("mock-secret");
         
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
@@ -316,6 +337,75 @@ class AuthServiceImplTest {
     void isAdmin_nullUser_shouldReturnFalse() {
         when(userMapper.selectById(TEST_USER_ID)).thenReturn(null);
         assertThat(authService.isAdmin("Bearer " + validToken)).isFalse();
+    }
+
+    // ==================== 微信登录 (wechatLogin) ====================
+
+    @Test
+    @DisplayName("微信登录 - 新用户应创建用户并返回")
+    void wechatLogin_newUser_shouldCreateAndReturn() {
+        LoginRequest request = new LoginRequest();
+        request.setCode("wx-code-123");
+
+        // 模拟微信 code2session 返回（JSON 字符串，微信接口 Content-Type: text/plain）
+        String wxResponse = "{\"openid\":\"real-openid-abc123\",\"session_key\":\"session-key-xyz\",\"errcode\":0}";
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(wxResponse);
+
+        // 用户不存在
+        when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+
+        User result = authService.wechatLogin(request);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getOpenid()).isEqualTo("real-openid-abc123");
+        assertThat(result.getRole()).isEqualTo("user");
+        assertThat(result.getCreditScore()).isEqualTo(100);
+        verify(userMapper).insert(any(User.class));
+        verify(restTemplate).getForObject(anyString(), eq(String.class));
+    }
+
+    @Test
+    @DisplayName("微信登录 - 已存在用户应直接返回")
+    void wechatLogin_existingUser_shouldReturnExisting() {
+        LoginRequest request = new LoginRequest();
+        request.setCode("wx-code-123");
+
+        // 模拟微信 code2session 返回（JSON 字符串）
+        String wxResponse = "{\"openid\":\"real-openid-abc123\",\"session_key\":\"session-key-xyz\",\"errcode\":0}";
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(wxResponse);
+
+        // 用户已存在
+        User existingUser = new User();
+        existingUser.setId(TEST_USER_ID);
+        existingUser.setOpenid("real-openid-abc123");
+        existingUser.setNickname("ExistingUser");
+        when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingUser);
+
+        User result = authService.wechatLogin(request);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(TEST_USER_ID);
+        assertThat(result.getOpenid()).isEqualTo("real-openid-abc123");
+        verify(userMapper, never()).insert(any(User.class));
+        verify(restTemplate).getForObject(anyString(), eq(String.class));
+    }
+
+    @Test
+    @DisplayName("微信登录 - code 无效应抛出异常")
+    void wechatLogin_invalidCode_shouldThrow() {
+        LoginRequest request = new LoginRequest();
+        request.setCode("invalid-code");
+
+        // 模拟微信返回错误码（JSON 字符串）
+        String wxResponse = "{\"errcode\":40029,\"errmsg\":\"invalid code\"}";
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn(wxResponse);
+
+        assertThatThrownBy(() -> authService.wechatLogin(request))
+                .isInstanceOf(AuthenticationException.class)
+                .hasMessageContaining("微信登录失败");
+
+        verify(userMapper, never()).selectOne(any());
+        verify(userMapper, never()).insert(any());
     }
 
     // ==================== Mock 登录 (mockLogin) ====================

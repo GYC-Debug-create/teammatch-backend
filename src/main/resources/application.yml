@@ -58,6 +58,12 @@ server:
   servlet:
     context-path: /api
 
+# 微信小程序配置
+wechat:
+  miniprogram:
+    app-id: ${WECHAT_APP_ID:}
+    secret: ${WECHAT_SECRET:}
+
 # 日志配置
 logging:
   level:

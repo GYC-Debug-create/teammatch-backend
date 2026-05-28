@@ -18,6 +18,7 @@ import com.teammatch.exception.ValidationException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.impl.AuthServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -30,12 +31,16 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
+    @Autowired
+    private Environment environment;
+
     /**
-     * 微信 Mock 登录
+     * 微信登录
+     * 前端调用 wx.login() 获取临时 code，后端通过 code2session 换取 openid
      */
     @PostMapping("/login")
     public Result<LoginResponse> login(@RequestBody LoginRequest request) {
-        User user = authService.mockLogin(request);
+        User user = authService.wechatLogin(request);
         String token = authService.generateToken(user);
         
         // 【实习要点2】构建 DTO，只返回前端需要的字段
@@ -48,6 +53,40 @@ public class AuthController {
         response.setCreditScore(user.getCreditScore());
         response.setToken(token);
         
+        return Result.success(response);
+    }
+
+    /**
+     * Mock 登录（仅开发测试用）
+     * 不调微信接口，直接把 code 当作 openid 使用
+     */
+    @PostMapping("/login/mock")
+    public Result<LoginResponse> mockLogin(@RequestBody LoginRequest request) {
+        // 环境隔离：非开发环境禁止使用 Mock 登录，防止伪造 openid
+        String[] activeProfiles = environment.getActiveProfiles();
+        boolean isDev = false;
+        for (String p : activeProfiles) {
+            if ("dev".equals(p) || "local".equals(p)) {
+                isDev = true;
+                break;
+            }
+        }
+        if (!isDev) {
+            return Result.fail(ReasonCode.UNAUTHORIZED);
+        }
+
+        User user = authService.mockLogin(request);
+        String token = authService.generateToken(user);
+
+        LoginResponse response = new LoginResponse();
+        response.setId(user.getId());
+        response.setNickname(user.getNickname());
+        response.setAvatarUrl(user.getAvatarUrl());
+        response.setEmailVerified(user.getEmailVerified());
+        response.setFormalProfileCompleted(user.getFormalProfileCompleted());
+        response.setCreditScore(user.getCreditScore());
+        response.setToken(token);
+
         return Result.success(response);
     }
 

@@ -1,7 +1,10 @@
 package com.teammatch.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
+import com.teammatch.config.WeChatProperties;
 import com.teammatch.dto.LoginRequest;
 import com.teammatch.dto.PasswordLoginRequest;
 import com.teammatch.dto.PasswordRequest;
@@ -24,9 +27,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.security.SecureRandom;
 import java.util.Date;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -46,6 +51,15 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private WeChatProperties weChatProperties;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private static final String CODE_PREFIX = "email:code:";
     private static final String SEND_LIMIT_PREFIX = "email:send:";
     private static final String TOKEN_PREFIX = "auth:token:";
@@ -55,7 +69,76 @@ public class AuthServiceImpl implements AuthService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Override
+    public User wechatLogin(LoginRequest request) {
+        // 1. 调微信 code2session 接口，用 code 换取 openid 和 session_key
+        String url = String.format(
+                "https://api.weixin.qq.com/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+                weChatProperties.getAppId(),
+                weChatProperties.getSecret(),
+                request.getCode()
+        );
+
+        // 微信接口返回 Content-Type: text/plain，先用 String 接收再手动解析
+        String responseBody;
+        try {
+            responseBody = restTemplate.getForObject(url, String.class);
+        } catch (Exception e) {
+            log.error("微信 code2session 接口调用失败: {}", e.getMessage());
+            throw new AuthenticationException(ReasonCode.WECHAT_LOGIN_FAILED, "微信服务器请求失败");
+        }
+
+        if (responseBody == null || responseBody.isEmpty()) {
+            throw new AuthenticationException(ReasonCode.WECHAT_LOGIN_FAILED, "微信服务器无响应");
+        }
+
+        Map<String, Object> wxResponse;
+        try {
+            wxResponse = objectMapper.readValue(responseBody,
+                    new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.error("微信 code2session 响应解析失败: {}", responseBody);
+            throw new AuthenticationException(ReasonCode.WECHAT_LOGIN_FAILED, "微信服务器返回格式异常");
+        }
+
+        // 2. 检查微信返回的错误码
+        Integer errcode = (Integer) wxResponse.get("errcode");
+        String errmsg = (String) wxResponse.get("errmsg");
+        if (errcode != null && errcode != 0) {
+            log.warn("微信登录失败: errcode={}, errmsg={}", errcode, errmsg);
+            // 常见错误：40029 code 无效/过期，45011 频率限制，40226 高风险
+            throw new AuthenticationException(ReasonCode.WECHAT_LOGIN_FAILED,
+                    "微信登录失败: " + (errmsg != null ? errmsg : "未知错误"));
+        }
+
+        // 3. 获取 openid（session_key 不需要持久化，直接丢弃）
+        String openid = (String) wxResponse.get("openid");
+        if (openid == null || openid.isEmpty()) {
+            throw new AuthenticationException(ReasonCode.WECHAT_LOGIN_FAILED, "未获取到微信身份标识");
+        }
+
+        // 4. 用 openid 查找或创建用户
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getOpenid, openid);
+        User user = userMapper.selectOne(wrapper);
+
+        if (user == null) {
+            user = new User();
+            user.setOpenid(openid);
+            // 默认昵称：取 openid 前 8 位，用户可在首次登录时修改
+            user.setNickname("User_" + openid.substring(0, Math.min(8, openid.length())));
+            user.setCreditScore(100);
+            user.setRole("user");
+            user.setStatus("active");
+            userMapper.insert(user);
+            log.info("新用户通过微信登录创建: openid={}", openid);
+        }
+
+        return user;
+    }
+
+    @Override
     public User mockLogin(LoginRequest request) {
+        log.warn("使用 Mock 登录（仅限开发测试）: code={}", request.getCode());
         // Mock 逻辑：直接使用 code 作为 openid 查找或创建用户
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getOpenid, request.getCode());
