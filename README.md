@@ -46,7 +46,7 @@ backend/
 CREATE DATABASE teammatch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-执行 `sql/init.sql` 初始化数据库表结构。
+执行 `sql/schema.sql` 初始化数据库表结构（含示例数据可用 `sql/rebuild_database.sql`）。
 
 ### 3. 配置本地环境
 
@@ -86,7 +86,7 @@ java -jar target/teammatch-backend-1.0.0-SNAPSHOT.jar
 
 ### 5. 验证启动
 
-访问健康检查接口（待实现）：
+访问健康检查接口：
 ```bash
 curl http://localhost:8080/api/health
 ```
@@ -120,7 +120,7 @@ curl http://localhost:8080/api/health
 - 管理端: `http://localhost:8080/api/admin`
 - 鉴权方式: `Authorization: Bearer {token}`
 
-详细接口文档参见 `docs/api/api-conventions.md`
+详细接口文档参见根目录 `M3_API_Documentation.md`、`M6_API_Documentation.md`等；系统设计见 `docs/design/system-design-v2.1.md`。
 
 ## 注意事项
 
