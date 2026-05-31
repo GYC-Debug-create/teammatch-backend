@@ -9,6 +9,7 @@ import com.teammatch.m6.service.AppealService;
 import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/appeals")
 @RequiredArgsConstructor
+@Slf4j
 public class AppealAdminController {
 
     private final AppealService appealService;
@@ -81,7 +83,8 @@ public class AppealAdminController {
         } catch (BusinessException e) {
             return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
         } catch (RuntimeException e) {
-            return Result.of(ReasonCode.UNKNOWN_ERROR.getCode(), e.getMessage(), null);
+            log.error("handleAppeal failed, appealId={}, handlerId={}", id, handlerId, e);
+            return Result.fail(ReasonCode.UNKNOWN_ERROR);
         }
     }
 }

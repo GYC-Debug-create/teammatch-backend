@@ -1,5 +1,23 @@
 # IMPLEMENT_LOG
 
+## 2026-05-26 工程化：部署文档 / 集成测试 / JaCoCo 门禁
+
+**文档与脚本**
+- `docs/DEPLOY.md`：阿里云轻量服务器部署（MySQL/Redis/jar/deploy.sh）
+- `docs/TESTING.md`：三层测试策略；不推荐 H2 全库替代 MySQL
+- `scripts/deploy.sh`、`application-prod.yml`、`application-local.yml.example`
+- `README.md` 同步 health、schema 路径、测试/部署链接
+
+**代码小改**
+- `AppealAdminController`：UNKNOWN_ERROR 固定文案 + error 日志（对齐 ReportAdmin）
+- `HealthControllerTest`、`AppealAdminControllerTest` 补测
+
+**测试基础设施**
+- JaCoCo：`mvn verify` 出报告；`-Pcoverage-check` 启用行/分支门禁（默认 45%/35%）
+- 集成测试：`ApplicationIntegrationIT`（Testcontainers MySQL+Redis），`RUN_INTEGRATION_TESTS=true mvn verify -Pintegration`
+
+---
+
 ## 2026-05-24 M5/M6 对齐：pending_review 不开放申诉
 
 **M5 结论**：`pending_review` 评价不开放用户申诉入口；代码逻辑无冲突；更新 V2.1 文档。
@@ -45,10 +63,10 @@
 | **产品/全组** | 信誉分下限规则 |
 
 ### 仍待（非阻塞联调）
-- D-11/D-13 级联实现
+- D-11/D-13 级联实现（P0 不实现）
 - 管理端信誉流水审计 API（可选）
-- `/api/health`（可选）
-- 治理闭环端到端测试证据（`mvn test` + 手工链路）
+- 治理闭环 Apifox 证据（部署环境上手工）
+- 联调服务器实际部署（见 `docs/DEPLOY.md`）
 
 ---
 
