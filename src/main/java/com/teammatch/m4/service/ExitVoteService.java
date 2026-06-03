@@ -3,7 +3,10 @@ package com.teammatch.m4.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
+import com.teammatch.m4.dto.ExitVoteVO;
 import com.teammatch.m4.entity.ExitVote;
+
+import java.util.List;
 
 /**
  * T-136~T-141: 退出投票服务接口
@@ -14,14 +17,17 @@ public interface ExitVoteService extends IService<ExitVote> {
     void selfExit(Long projectId, Long userId);
 
     /** T-137: 队长发起退出投票 */
-    ExitVote initiateVote(Long projectId, ExitVoteCreateDTO dto);
+    ExitVoteVO initiateVote(Long projectId, ExitVoteCreateDTO dto);
 
     /** T-138: 投票详情 */
-    ExitVote getVoteDetail(Long voteId);
+    ExitVoteVO getVoteDetail(Long voteId);
 
     /** T-139: 提交投票（agree/disagree），防重复 */
     void submitVote(Long voteId, ExitVoteSubmitDTO dto);
 
     /** T-140: 关闭投票并执行结果（加事务+幂等） */
-    ExitVote closeVote(Long voteId, Long operatorId);
+    ExitVoteVO closeVote(Long voteId, Long operatorId);
+
+    /** 查询项目下所有退出投票列表（按创建时间倒序） */
+    List<ExitVoteVO> getVoteList(Long projectId);
 }

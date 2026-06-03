@@ -4,10 +4,12 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
-import com.teammatch.m4.entity.ExitVote;
+import com.teammatch.m4.dto.ExitVoteVO;
 import com.teammatch.m4.service.ExitVoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * T-136~T-141: 退出流程 REST API
@@ -26,7 +28,7 @@ public class ExitVoteController {
      */
     @PostMapping("/self")
     public Result<Void> selfExit(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @RequestParam Long userId) {
         try {
             exitVoteService.selfExit(projectId, userId);
@@ -41,15 +43,24 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/votes
      */
     @PostMapping("/votes")
-    public Result<ExitVote> initiateVote(
-            @PathVariable Long projectId,
+    public Result<ExitVoteVO> initiateVote(
+            @PathVariable("projectId") Long projectId,
             @RequestBody ExitVoteCreateDTO dto) {
         try {
-            ExitVote vote = exitVoteService.initiateVote(projectId, dto);
-            return Result.success(vote);
+            return Result.success(exitVoteService.initiateVote(projectId, dto));
         } catch (Exception e) {
             return Result.fail(mapInitiateVoteReason(e));
         }
+    }
+
+    /**
+     * 退出投票列表
+     * GET /m4/projects/{projectId}/exit/votes
+     */
+    @GetMapping("/votes")
+    public Result<List<ExitVoteVO>> getVoteList(
+            @PathVariable("projectId") Long projectId) {
+        return Result.success(exitVoteService.getVoteList(projectId));
     }
 
     /**
@@ -57,15 +68,15 @@ public class ExitVoteController {
      * GET /m4/projects/{projectId}/exit/votes/{voteId}
      */
     @GetMapping("/votes/{voteId}")
-    public Result<ExitVote> getVoteDetail(
-            @PathVariable Long projectId,
+    public Result<ExitVoteVO> getVoteDetail(
+            @PathVariable("projectId") Long projectId,
             @PathVariable Long voteId) {
         try {
-            ExitVote vote = exitVoteService.getVoteDetail(voteId);
-            if (vote == null) {
+            ExitVoteVO vo = exitVoteService.getVoteDetail(voteId);
+            if (vo == null) {
                 return Result.fail(ReasonCode.M4_RESOURCE_NOT_FOUND);
             }
-            return Result.success(vote);
+            return Result.success(vo);
         } catch (Exception e) {
             return Result.fail(ReasonCode.M4_RESOURCE_NOT_FOUND);
         }
@@ -77,7 +88,7 @@ public class ExitVoteController {
      */
     @PostMapping("/votes/{voteId}/submit")
     public Result<Void> submitVote(
-            @PathVariable Long projectId,
+            @PathVariable("projectId") Long projectId,
             @PathVariable Long voteId,
             @RequestBody ExitVoteSubmitDTO dto) {
         try {
@@ -93,13 +104,12 @@ public class ExitVoteController {
      * POST /m4/projects/{projectId}/exit/votes/{voteId}/close?operatorId=xxx
      */
     @PostMapping("/votes/{voteId}/close")
-    public Result<ExitVote> closeVote(
-            @PathVariable Long projectId,
+    public Result<ExitVoteVO> closeVote(
+            @PathVariable("projectId") Long projectId,
             @PathVariable Long voteId,
             @RequestParam Long operatorId) {
         try {
-            ExitVote result = exitVoteService.closeVote(voteId, operatorId);
-            return Result.success(result);
+            return Result.success(exitVoteService.closeVote(voteId, operatorId));
         } catch (Exception e) {
             return Result.fail(mapCloseVoteReason(e));
         }

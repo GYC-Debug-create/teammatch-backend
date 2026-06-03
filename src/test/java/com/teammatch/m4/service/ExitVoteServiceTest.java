@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
+import com.teammatch.m4.dto.ExitVoteVO;
 import com.teammatch.m4.entity.ExitVote;
 import com.teammatch.m4.entity.ExitVoteRecord;
 import com.teammatch.m4.entity.Project;
@@ -178,7 +179,7 @@ class ExitVoteServiceTest {
         dto.setReason("长期不活跃");
         dto.setPenaltyLevel("negotiated");
 
-        ExitVote result = service.initiateVote(PROJECT_ID, dto);
+        ExitVoteVO result = service.initiateVote(PROJECT_ID, dto);
 
         assertThat(result.getStatus()).isEqualTo("voting");
         assertThat(result.getTotalVoters()).isEqualTo(2);
@@ -333,7 +334,7 @@ class ExitVoteServiceTest {
         when(creditChangeMapper.insert(any())).thenReturn(1);
         when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
 
-        ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
+        ExitVoteVO result = service.closeVote(VOTE_ID, LEADER_ID);
 
         assertThat(result.getStatus()).isEqualTo("closed");
         assertThat(result.getResult()).isEqualTo("pass");
@@ -348,7 +349,7 @@ class ExitVoteServiceTest {
         when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
         when(exitVoteMapper.updateById(any())).thenReturn(1);
 
-        ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
+        ExitVoteVO result = service.closeVote(VOTE_ID, LEADER_ID);
 
         assertThat(result.getStatus()).isEqualTo("closed");
         assertThat(result.getResult()).isEqualTo("reject");
@@ -361,7 +362,7 @@ class ExitVoteServiceTest {
         openVote.setStatus("closed"); // 已关闭
         when(exitVoteMapper.selectByIdForUpdate(VOTE_ID)).thenReturn(openVote);
 
-        ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
+        ExitVoteVO result = service.closeVote(VOTE_ID, LEADER_ID);
 
         assertThat(result.getStatus()).isEqualTo("closed");
         verify(exitVoteMapper, never()).updateById(any());
@@ -531,7 +532,7 @@ class ExitVoteServiceTest {
         when(creditChangeMapper.insert(any())).thenReturn(1);
         when(userMapper.updateCreditScore(any(), anyInt())).thenReturn(1);
 
-        ExitVote result = service.getVoteDetail(VOTE_ID);
+        ExitVoteVO result = service.getVoteDetail(VOTE_ID);
 
         assertThat(result.getStatus()).isEqualTo("closed");
         assertThat(result.getResult()).isEqualTo("pass");
@@ -611,7 +612,7 @@ class ExitVoteServiceTest {
         when(exitVoteMapper.updateById(any())).thenReturn(1);
         when(teamMemberMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(0); // CAS 失败
 
-        ExitVote result = service.closeVote(VOTE_ID, LEADER_ID);
+        ExitVoteVO result = service.closeVote(VOTE_ID, LEADER_ID);
 
         assertThat(result.getResult()).isEqualTo("pass");
         verify(creditChangeMapper, never()).insert(any());    // 不产生额外扣分流水
