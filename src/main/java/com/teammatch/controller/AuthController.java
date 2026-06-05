@@ -17,6 +17,7 @@ import com.teammatch.exception.NotFoundException;
 import com.teammatch.exception.ValidationException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.impl.AuthServiceImpl;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 认证控制器 - M3 模块
  */
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -130,7 +132,7 @@ public class AuthController {
             // 资源未找到
             return Result.fail(e.getReasonCode());
         } catch (Exception e) {
-            // 未知异常
+            log.error("passwordLogin 未知异常, username={}", request.getUsername(), e);
             return Result.fail(ReasonCode.UNKNOWN_ERROR);
         }
     }
