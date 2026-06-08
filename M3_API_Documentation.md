@@ -593,6 +593,42 @@ techScore = totalStars × 10 + totalCommits × 2 + totalPRs × 5 + totalRepos ×
 
 ---
 
+### 三、用户中心 (`/me`)
+
+#### 1. 获取用户角标/待处理事项队列
+**接口**: `GET /api/me/badges`
+
+**说明**: 聚合统计当前用户待处理的事项数量，用于前端展示未读角标。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": {
+    "pendingInvites": 2,
+    "pendingVotes": 1,
+    "pendingEvaluations": 0,
+    "total": 3
+  }
+}
+```
+
+**字段说明**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| pendingInvites | int | 待处理的组队请求（邀请/申请）数量 |
+| pendingVotes | int | 待处理的退出投票数量（未投票的） |
+| pendingEvaluations | int | 待完成的互评数量（应评未评的） |
+| total | int | 以上三项总和 |
+
+---
+
 #### 4. 全量替换用户技能（推荐）
 **接口**: `PUT /api/profile/skills`
 
