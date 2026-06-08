@@ -106,4 +106,10 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
      */
     @Select("SELECT * FROM evaluation WHERE target_id = #{targetId} ORDER BY created_at DESC")
     List<Evaluation> findByTargetId(@Param("targetId") Long targetId);
+
+    /**
+     * 查询用户收到的、状态为 normal 的互评（申诉页候选，与 POST /appeals 规则一致）
+     */
+    @Select("SELECT * FROM evaluation WHERE target_id = #{targetId} AND status = 'normal' ORDER BY created_at DESC")
+    List<Evaluation> findNormalByTargetId(@Param("targetId") Long targetId);
 }

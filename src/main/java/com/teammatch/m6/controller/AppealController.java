@@ -4,6 +4,8 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.entity.Appeal;
 import com.teammatch.m6.dto.AppealCreateDTO;
+import com.teammatch.m6.dto.AppealableEvaluationVO;
+import com.teammatch.m6.dto.AppealablePenaltyVO;
 import com.teammatch.m6.service.AppealService;
 import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
@@ -44,6 +46,28 @@ public class AppealController {
         } catch (IllegalStateException e) {
             return Result.of(ReasonCode.STATUS_CONFLICT.getCode(), e.getMessage(), null);
         }
+    }
+
+    /**
+     * 申诉页：可申诉的评价列表
+     * GET /api/appeals/appealable/evaluations
+     */
+    @GetMapping("/appealable/evaluations")
+    public Result<List<AppealableEvaluationVO>> listAppealableEvaluations(
+            @RequestHeader("Authorization") String token) {
+        Long userId = authUtil.requireUserId(token);
+        return Result.success(appealService.listAppealableEvaluations(userId));
+    }
+
+    /**
+     * 申诉页：可申诉的生效中处罚列表
+     * GET /api/appeals/appealable/penalties
+     */
+    @GetMapping("/appealable/penalties")
+    public Result<List<AppealablePenaltyVO>> listAppealablePenalties(
+            @RequestHeader("Authorization") String token) {
+        Long userId = authUtil.requireUserId(token);
+        return Result.success(appealService.listAppealablePenalties(userId));
     }
 
     /**

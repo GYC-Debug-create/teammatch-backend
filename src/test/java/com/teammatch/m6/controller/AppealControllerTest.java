@@ -6,6 +6,8 @@ import com.teammatch.config.AuthExceptionHandler;
 import com.teammatch.entity.Appeal;
 import com.teammatch.exception.AuthenticationException;
 import com.teammatch.m6.dto.AppealCreateDTO;
+import com.teammatch.m6.dto.AppealableEvaluationVO;
+import com.teammatch.m6.dto.AppealablePenaltyVO;
 import com.teammatch.m6.service.AppealService;
 import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +106,39 @@ class AppealControllerTest {
                 .andExpect(jsonPath("$.code").value(ReasonCode.UNAUTHORIZED.getCode()));
 
         verify(appealService, never()).createAppeal(any(), any());
+    }
+
+    @Test
+    @DisplayName("listAppealableEvaluations: 成功获取可申诉评价")
+    void listAppealableEvaluations_success() throws Exception {
+        AppealableEvaluationVO vo = new AppealableEvaluationVO();
+        vo.setEvaluationId(200L);
+        vo.setProjectId(1L);
+        vo.setProjectTitle("后端实训");
+        when(appealService.listAppealableEvaluations(USER_ID)).thenReturn(List.of(vo));
+
+        mockMvc.perform(get("/appeals/appealable/evaluations")
+                        .header("Authorization", TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].projectTitle").value("后端实训"));
+    }
+
+    @Test
+    @DisplayName("listAppealablePenalties: 成功获取可申诉处罚")
+    void listAppealablePenalties_success() throws Exception {
+        AppealablePenaltyVO vo = new AppealablePenaltyVO();
+        vo.setPenaltyId(60L);
+        vo.setType("credit_deduct");
+        vo.setStatus("active");
+        when(appealService.listAppealablePenalties(USER_ID)).thenReturn(List.of(vo));
+
+        mockMvc.perform(get("/appeals/appealable/penalties")
+                        .header("Authorization", TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data[0].penaltyId").value(60));
     }
 
     @Test

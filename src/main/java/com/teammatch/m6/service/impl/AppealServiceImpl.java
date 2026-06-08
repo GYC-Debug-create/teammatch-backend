@@ -5,11 +5,15 @@ import com.teammatch.common.Result;
 import com.teammatch.dto.AppealRestoreCommand;
 import com.teammatch.entity.Appeal;
 import com.teammatch.entity.Evaluation;
+import com.teammatch.entity.Project;
 import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.AppealMapper;
 import com.teammatch.mapper.EvaluationMapper;
+import com.teammatch.mapper.ProjectMapper;
 import com.teammatch.m6.dto.AppealCreateDTO;
 import com.teammatch.m6.dto.AppealHandleDTO;
+import com.teammatch.m6.dto.AppealableEvaluationVO;
+import com.teammatch.m6.dto.AppealablePenaltyVO;
 import com.teammatch.m6.dto.PenaltyRevokeDTO;
 import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.mapper.PenaltyMapper;
@@ -22,7 +26,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 申诉 Service 实现类
@@ -37,6 +45,7 @@ public class AppealServiceImpl implements AppealService {
     private final AppealMapper appealMapper;
     private final EvaluationMapper evaluationMapper;
     private final PenaltyMapper penaltyMapper;
+    private final ProjectMapper projectMapper;
     private final PenaltyService penaltyService;
     private final AppealRestoreService appealRestoreService;
 
@@ -80,44 +89,109 @@ public class AppealServiceImpl implements AppealService {
     }
 
     /**
-     * 校验目标是否存在且属于当前用户
+     * 校验目标是否存在且属于当前用户、且满足申诉条件（与申诉页列表规则一致）
      */
     private void validateTargetExistsAndBelongsToUser(String targetType, Long targetId, Long userId) {
         if ("evaluation".equals(targetType)) {
-            Evaluation evaluation = evaluationMapper.selectById(targetId);
-            if (evaluation == null) {
-                throw new IllegalArgumentException("评价记录不存在: " + targetId);
-            }
-            // 申诉用户必须是评价的被评价人
-            if (!evaluation.getTargetId().equals(userId)) {
-                throw new IllegalArgumentException("只能对自己的评价提交申诉");
-            }
-            // V2.1 §6.7 / §7.4：仅 status=normal 可申诉；pending_review 走管理端复核
-            if (Evaluation.STATUS_PENDING_REVIEW.equals(evaluation.getStatus())) {
-                throw new IllegalStateException("待复核中的评价暂不可申诉，请等待管理员复核结果");
-            }
-            if (Evaluation.STATUS_VOIDED.equals(evaluation.getStatus())
-                    || Evaluation.STATUS_KEPT_NO_CREDIT.equals(evaluation.getStatus())) {
-                throw new IllegalStateException("该评价已裁定，无法申诉");
-            }
-            // 拒绝未知/非 normal 状态（脏数据或后续新增状态），已知四种常量在上文已分支
-            if (!Evaluation.STATUS_NORMAL.equals(evaluation.getStatus())) {
-                throw new IllegalStateException("仅可对已生效的正常评价提交申诉");
-            }
+            throwIfEvaluationNotAppealable(evaluationMapper.selectById(targetId), userId, targetId);
         } else if ("penalty".equals(targetType)) {
-            com.teammatch.m6.entity.Penalty penalty = penaltyMapper.selectById(targetId);
-            if (penalty == null) {
-                throw new IllegalArgumentException("处罚记录不存在: " + targetId);
-            }
-            // 申诉用户必须是被处罚人
-            if (!penalty.getUserId().equals(userId)) {
-                throw new IllegalArgumentException("只能对自己的处罚提交申诉");
-            }
-            // 已撤销的处罚不能申诉
-            if ("revoked".equals(penalty.getStatus())) {
-                throw new IllegalStateException("该处罚已撤销，无需申诉");
-            }
+            throwIfPenaltyNotAppealable(penaltyMapper.selectById(targetId), userId, targetId);
         }
+    }
+
+    private void throwIfEvaluationNotAppealable(Evaluation evaluation, Long userId, Long targetId) {
+        if (evaluation == null) {
+            throw new IllegalArgumentException("评价记录不存在: " + targetId);
+        }
+        if (!Objects.equals(evaluation.getTargetId(), userId)) {
+            throw new IllegalArgumentException("只能对自己的评价提交申诉");
+        }
+        if (Evaluation.STATUS_PENDING_REVIEW.equals(evaluation.getStatus())) {
+            throw new IllegalStateException("待复核中的评价暂不可申诉，请等待管理员复核结果");
+        }
+        if (Evaluation.STATUS_VOIDED.equals(evaluation.getStatus())
+                || Evaluation.STATUS_KEPT_NO_CREDIT.equals(evaluation.getStatus())) {
+            throw new IllegalStateException("该评价已裁定，无法申诉");
+        }
+        if (!Evaluation.STATUS_NORMAL.equals(evaluation.getStatus())) {
+            throw new IllegalStateException("仅可对已生效的正常评价提交申诉");
+        }
+    }
+
+    private void throwIfPenaltyNotAppealable(Penalty penalty, Long userId, Long targetId) {
+        if (penalty == null) {
+            throw new IllegalArgumentException("处罚记录不存在: " + targetId);
+        }
+        if (!Objects.equals(penalty.getUserId(), userId)) {
+            throw new IllegalArgumentException("只能对自己的处罚提交申诉");
+        }
+        if ("revoked".equals(penalty.getStatus())) {
+            throw new IllegalStateException("该处罚已撤销，无需申诉");
+        }
+        if (!"active".equals(penalty.getStatus())) {
+            throw new IllegalStateException("仅可对生效中的处罚提交申诉");
+        }
+    }
+
+    private boolean hasAppealForTarget(String targetType, Long targetId, Long userId) {
+        return appealMapper.selectByTargetAndUser(targetType, targetId, userId) != null;
+    }
+
+    @Override
+    public List<AppealableEvaluationVO> listAppealableEvaluations(Long userId) {
+        List<Evaluation> candidates = evaluationMapper.findNormalByTargetId(userId);
+        Map<Long, String> projectTitleCache = new HashMap<>();
+        List<AppealableEvaluationVO> result = new ArrayList<>();
+
+        for (Evaluation evaluation : candidates) {
+            if (hasAppealForTarget("evaluation", evaluation.getId(), userId)) {
+                continue;
+            }
+            AppealableEvaluationVO vo = new AppealableEvaluationVO();
+            vo.setEvaluationId(evaluation.getId());
+            vo.setProjectId(evaluation.getProjectId());
+            vo.setProjectTitle(resolveProjectTitle(evaluation.getProjectId(), projectTitleCache));
+            vo.setCommunicationScore(evaluation.getCommunicationScore());
+            vo.setTaskScore(evaluation.getTaskScore());
+            vo.setSkillScore(evaluation.getSkillScore());
+            vo.setResponsibilityScore(evaluation.getResponsibilityScore());
+            vo.setAverageScore(evaluation.getAverageScore());
+            vo.setComment(evaluation.getComment());
+            vo.setCreatedAt(evaluation.getCreatedAt());
+            result.add(vo);
+        }
+        return result;
+    }
+
+    @Override
+    public List<AppealablePenaltyVO> listAppealablePenalties(Long userId) {
+        List<Penalty> activePenalties = penaltyMapper.selectActiveByUserId(userId);
+        List<AppealablePenaltyVO> result = new ArrayList<>();
+
+        for (Penalty penalty : activePenalties) {
+            if (hasAppealForTarget("penalty", penalty.getId(), userId)) {
+                continue;
+            }
+            AppealablePenaltyVO vo = new AppealablePenaltyVO();
+            vo.setPenaltyId(penalty.getId());
+            vo.setType(penalty.getType());
+            vo.setCreditDeductValue(penalty.getCreditDeductValue());
+            vo.setReason(penalty.getReason());
+            vo.setStatus(penalty.getStatus());
+            vo.setCreatedAt(penalty.getCreatedAt());
+            result.add(vo);
+        }
+        return result;
+    }
+
+    private String resolveProjectTitle(Long projectId, Map<Long, String> cache) {
+        if (projectId == null) {
+            return null;
+        }
+        return cache.computeIfAbsent(projectId, id -> {
+            Project project = projectMapper.selectById(id);
+            return project != null ? project.getTitle() : null;
+        });
     }
 
     @Override

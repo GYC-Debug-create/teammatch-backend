@@ -1,6 +1,6 @@
 # M6 模块（治理/举报/处罚）API 文档
 
-> 版本：master 联调版 | 接口总数：**25** | 维护：M6
+> 版本：master 联调版 | 接口总数：**27** | 维护：M6
 
 ---
 
@@ -44,13 +44,15 @@ M6 负责 TeamMatch 平台**治理闭环**：板块分类、举报、处罚、�
 | 16 | GET | `/admin/penalties/{id}` | 管理员 |
 | 17 | PUT | `/admin/penalties/{id}/revoke` | 管理员 |
 | 18 | POST | `/appeals` | 登录用户 |
-| 19 | GET | `/appeals/my` | 登录用户 |
-| 20 | GET | `/appeals/{id}` | 登录用户（仅本人） |
-| 21 | GET | `/admin/appeals` | 管理员 |
-| 22 | GET | `/admin/appeals/{id}` | 管理员 |
-| 23 | PUT | `/admin/appeals/{id}/handle` | 管理员 |
-| 24 | GET | `/admin/evaluations/pending` | 管理员 |
-| 25 | POST | `/admin/evaluations/{id}/review` | 管理员 |
+| 19 | GET | `/appeals/appealable/evaluations` | 登录用户 |
+| 20 | GET | `/appeals/appealable/penalties` | 登录用户 |
+| 21 | GET | `/appeals/my` | 登录用户 |
+| 22 | GET | `/appeals/{id}` | 登录用户（仅本人） |
+| 23 | GET | `/admin/appeals` | 管理员 |
+| 24 | GET | `/admin/appeals/{id}` | 管理员 |
+| 25 | PUT | `/admin/appeals/{id}/handle` | 管理员 |
+| 26 | GET | `/admin/evaluations/pending` | 管理员 |
+| 27 | POST | `/admin/evaluations/{id}/review` | 管理员 |
 
 > 以上路径均相对于 Base URL `http://localhost:8080/api`，完整 URL 需加前缀 `/api`。
 
@@ -431,11 +433,62 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 **错误**：M1001、M1003（重复申诉 / 已撤销处罚）
 
-#### 19. 获取我的申诉列表
+#### 19. 申诉页可申诉评价列表
+
+`GET /api/appeals/appealable/evaluations`
+
+| 规则 | 说明 |
+|------|------|
+| 数据范围 | 仅 `evaluation.status=normal` 且 `target_id=当前用户` |
+| 排除项 | 已对同一评价提交过申诉（含 pending/approved/rejected） |
+| 附加字段 | `projectTitle`（避免前端再调项目详情） |
+
+**响应 data 示例**：
+```json
+[
+  {
+    "evaluationId": 42,
+    "projectId": 100,
+    "projectTitle": "后端实训",
+    "communicationScore": 2,
+    "taskScore": 2,
+    "skillScore": 2,
+    "responsibilityScore": 2,
+    "averageScore": 2.0,
+    "comment": "沟通不足",
+    "createdAt": "2026-06-01T10:00:00"
+  }
+]
+```
+
+#### 20. 申诉页可申诉处罚列表
+
+`GET /api/appeals/appealable/penalties`
+
+| 规则 | 说明 |
+|------|------|
+| 数据范围 | 仅 `penalty.status=active` 且 `user_id=当前用户` |
+| 排除项 | 已对同一处罚提交过申诉 |
+
+**响应 data 示例**：
+```json
+[
+  {
+    "penaltyId": 60,
+    "type": "credit_deduct",
+    "creditDeductValue": 10,
+    "reason": "违规操作",
+    "status": "active",
+    "createdAt": "2026-06-01T10:00:00"
+  }
+]
+```
+
+#### 21. 获取我的申诉列表
 
 `GET /api/appeals/my`
 
-#### 20. 获取申诉详情
+#### 22. 获取申诉详情
 
 `GET /api/appeals/{id}`
 
@@ -449,7 +502,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 前缀：`/api/admin/appeals`，均需管理员 Token。
 
-#### 21. 获取申诉列表
+#### 23. 获取申诉列表
 
 `GET /api/admin/appeals?status=pending&targetType=penalty`
 
@@ -457,11 +510,11 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 - `status`：pending / approved / rejected
 - `targetType`：evaluation / penalty
 
-#### 22. 获取申诉详情
+#### 24. 获取申诉详情
 
 `GET /api/admin/appeals/{id}`
 
-#### 23. 处理申诉
+#### 25. 处理申诉
 
 `PUT /api/admin/appeals/{id}/handle`
 
@@ -495,7 +548,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 > HTTP 入口在 M6 包，业务逻辑委托 M5-6 `EvaluationReviewService`。
 
-#### 24. 获取待复核评价列表
+#### 26. 获取待复核评价列表
 
 `GET /api/admin/evaluations/pending?projectId=100`
 
@@ -525,7 +578,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 ]
 ```
 
-#### 25. 执行评价复核
+#### 27. 执行评价复核
 
 `POST /api/admin/evaluations/{id}/review`
 

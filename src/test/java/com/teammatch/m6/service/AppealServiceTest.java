@@ -6,9 +6,13 @@ import com.teammatch.dto.AppealRestoreCommand;
 import com.teammatch.dto.AppealRestoreResult;
 import com.teammatch.entity.Appeal;
 import com.teammatch.entity.Evaluation;
+import com.teammatch.entity.Project;
 import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.AppealMapper;
 import com.teammatch.mapper.EvaluationMapper;
+import com.teammatch.mapper.ProjectMapper;
+import com.teammatch.m6.dto.AppealableEvaluationVO;
+import com.teammatch.m6.dto.AppealablePenaltyVO;
 import com.teammatch.m6.dto.AppealCreateDTO;
 import com.teammatch.m6.dto.AppealHandleDTO;
 import com.teammatch.m6.dto.PenaltyRevokeDTO;
@@ -49,6 +53,9 @@ class AppealServiceTest {
 
     @Mock
     private PenaltyMapper penaltyMapper;
+
+    @Mock
+    private ProjectMapper projectMapper;
 
     @Mock
     private PenaltyService penaltyService;
@@ -625,6 +632,68 @@ class AppealServiceTest {
         Appeal result = appealService.getAppealById(999L);
 
         assertThat(result).isNull();
+    }
+
+    // ==================== listAppealableEvaluations / listAppealablePenalties ====================
+
+    @Test
+    @DisplayName("listAppealableEvaluations: 返回 normal 且未申诉的评价")
+    void listAppealableEvaluations_success() {
+        evaluation.setAverageScore(new java.math.BigDecimal("2.50"));
+        evaluation.setComment("沟通不足");
+        evaluation.setCreatedAt(LocalDateTime.now().minusDays(1));
+
+        Project project = new Project();
+        project.setId(1L);
+        project.setTitle("后端实训");
+
+        when(evaluationMapper.findNormalByTargetId(USER_ID)).thenReturn(List.of(evaluation));
+        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(null);
+        when(projectMapper.selectById(1L)).thenReturn(project);
+
+        List<AppealableEvaluationVO> result = appealService.listAppealableEvaluations(USER_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getEvaluationId()).isEqualTo(EVALUATION_ID);
+        assertThat(result.get(0).getProjectTitle()).isEqualTo("后端实训");
+    }
+
+    @Test
+    @DisplayName("listAppealableEvaluations: 已申诉过的评价不返回")
+    void listAppealableEvaluations_excludesAppealed() {
+        when(evaluationMapper.findNormalByTargetId(USER_ID)).thenReturn(List.of(evaluation));
+        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(rejectedAppeal);
+
+        List<AppealableEvaluationVO> result = appealService.listAppealableEvaluations(USER_ID);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("listAppealablePenalties: 返回 active 且未申诉的处罚")
+    void listAppealablePenalties_success() {
+        activePenalty.setReason("违规操作");
+        activePenalty.setCreatedAt(LocalDateTime.now().minusDays(1));
+
+        when(penaltyMapper.selectActiveByUserId(USER_ID)).thenReturn(List.of(activePenalty));
+        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(null);
+
+        List<AppealablePenaltyVO> result = appealService.listAppealablePenalties(USER_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPenaltyId()).isEqualTo(PENALTY_ID);
+        assertThat(result.get(0).getStatus()).isEqualTo("active");
+    }
+
+    @Test
+    @DisplayName("listAppealablePenalties: 已申诉过的处罚不返回")
+    void listAppealablePenalties_excludesAppealed() {
+        when(penaltyMapper.selectActiveByUserId(USER_ID)).thenReturn(List.of(activePenalty));
+        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(approvedAppeal);
+
+        List<AppealablePenaltyVO> result = appealService.listAppealablePenalties(USER_ID);
+
+        assertThat(result).isEmpty();
     }
 
     // ==================== getPendingAppeal ====================

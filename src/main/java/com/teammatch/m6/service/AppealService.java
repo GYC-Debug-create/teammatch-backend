@@ -3,6 +3,8 @@ package com.teammatch.m6.service;
 import com.teammatch.entity.Appeal;
 import com.teammatch.m6.dto.AppealCreateDTO;
 import com.teammatch.m6.dto.AppealHandleDTO;
+import com.teammatch.m6.dto.AppealableEvaluationVO;
+import com.teammatch.m6.dto.AppealablePenaltyVO;
 
 import java.util.List;
 
@@ -69,4 +71,14 @@ public interface AppealService {
      * @return 待处理申诉，不存在返回null
      */
     Appeal getPendingAppeal(String targetType, Long targetId);
+
+    /**
+     * 申诉页：可申诉的评价列表（status=normal 且未提交过申诉，含项目标题）
+     */
+    List<AppealableEvaluationVO> listAppealableEvaluations(Long userId);
+
+    /**
+     * 申诉页：可申诉的生效中处罚列表（active 且未提交过申诉）
+     */
+    List<AppealablePenaltyVO> listAppealablePenalties(Long userId);
 }
