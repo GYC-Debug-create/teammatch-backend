@@ -595,7 +595,62 @@ techScore = totalStars × 10 + totalCommits × 2 + totalPRs × 5 + totalRepos ×
 
 ### 三、用户中心 (`/me`)
 
-#### 1. 获取用户角标/待处理事项队列
+#### 1. 获取用户列表（分页）
+**接口**: `GET /api/users?page=1&size=20&keyword=张三`
+
+**说明**: 分页获取所有用户信息，支持按昵称关键字搜索。返回 `ProfileDetailVO`，排除 `openid`、`passwordHash` 等敏感字段。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求参数**:
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| page | int | 1 | 页码（从 1 开始） |
+| size | int | 20 | 每页条数（1~100） |
+| keyword | String | 可选 | 按昵称模糊搜索 |
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": {
+    "records": [
+      {
+        "id": 1,
+        "nickname": "张三",
+        "avatarUrl": null,
+        "email": null,
+        "emailVerified": false,
+        "school": "清华大学",
+        "major": "计算机科学与技术",
+        "grade": "2023级",
+        "bio": "热爱编程",
+        "githubUsername": null,
+        "githubClaimed": false,
+        "formalProfileCompleted": true,
+        "creditScore": 100,
+        "role": "user",
+        "status": "active",
+        "username": "zhangsan",
+        "createdAt": "2026-01-01T00:00:00",
+        "updatedAt": "2026-01-01T00:00:00"
+      }
+    ],
+    "total": 1,
+    "size": 20,
+    "current": 1,
+    "pages": 1
+  }
+}
+```
+
+---
+
+#### 2. 获取用户角标/待处理事项队列
 **接口**: `GET /api/me/badges`
 
 **说明**: 聚合统计当前用户待处理的事项数量，用于前端展示未读角标。
