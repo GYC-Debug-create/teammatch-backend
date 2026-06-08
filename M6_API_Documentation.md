@@ -1,6 +1,6 @@
 # M6 模块（治理/举报/处罚）API 文档
 
-> 版本：master 联调版 | 接口总数：**27** | 维护：M6
+> 版本：master 联调版 | 接口总数：**28** | 维护：M6
 
 ---
 
@@ -10,7 +10,7 @@ M6 负责 TeamMatch 平台**治理闭环**：板块分类、举报、处罚、�
 
 | 对接方 | 使用的接口 | 场景 |
 |--------|-----------|------|
-| **M2 Web 管理后台** | `/api/admin/*`（19 个） | 5 个后台页面：板块 / 举报 / 处罚 / 申诉 / 评价复核 |
+| **M2 Web 管理后台** | `/api/admin/*`（20 个） | 5 个后台页面：板块 / 举报 / 处罚 / 申诉 / 评价复核 |
 | **M1 小程序** | `GET /api/boards` | 创建项目时选择板块 |
 | **M1/M2 小程序用户** | `/api/reports`、`/api/appeals`、`/api/penalties` | 举报、申诉、查看自己的处罚 |
 
@@ -32,27 +32,28 @@ M6 负责 TeamMatch 平台**治理闭环**：板块分类、举报、处罚、�
 | 4 | DELETE | `/admin/boards/{id}` | 管理员 |
 | 5 | GET | `/admin/boards/{id}` | 管理员 |
 | 6 | GET | `/admin/boards` | 管理员 |
-| 7 | POST | `/reports` | 登录用户 |
-| 8 | GET | `/reports/my` | 登录用户 |
-| 9 | GET | `/admin/reports` | 管理员 |
-| 10 | GET | `/admin/reports/{id}` | 管理员 |
-| 11 | PUT | `/admin/reports/{id}/handle` | 管理员 |
-| 12 | GET | `/penalties/my` | 登录用户 |
-| 13 | GET | `/penalties/my/active` | 登录用户 |
-| 14 | POST | `/admin/penalties` | 管理员 |
-| 15 | GET | `/admin/penalties` | 管理员 |
-| 16 | GET | `/admin/penalties/{id}` | 管理员 |
-| 17 | PUT | `/admin/penalties/{id}/revoke` | 管理员 |
-| 18 | POST | `/appeals` | 登录用户 |
-| 19 | GET | `/appeals/appealable/evaluations` | 登录用户 |
-| 20 | GET | `/appeals/appealable/penalties` | 登录用户 |
-| 21 | GET | `/appeals/my` | 登录用户 |
-| 22 | GET | `/appeals/{id}` | 登录用户（仅本人） |
-| 23 | GET | `/admin/appeals` | 管理员 |
-| 24 | GET | `/admin/appeals/{id}` | 管理员 |
-| 25 | PUT | `/admin/appeals/{id}/handle` | 管理员 |
-| 26 | GET | `/admin/evaluations/pending` | 管理员 |
-| 27 | POST | `/admin/evaluations/{id}/review` | 管理员 |
+| 7 | GET | `/admin/boards/{id}/projects` | 管理员 |
+| 8 | POST | `/reports` | 登录用户 |
+| 9 | GET | `/reports/my` | 登录用户 |
+| 10 | GET | `/admin/reports` | 管理员 |
+| 11 | GET | `/admin/reports/{id}` | 管理员 |
+| 12 | PUT | `/admin/reports/{id}/handle` | 管理员 |
+| 13 | GET | `/penalties/my` | 登录用户 |
+| 14 | GET | `/penalties/my/active` | 登录用户 |
+| 15 | POST | `/admin/penalties` | 管理员 |
+| 16 | GET | `/admin/penalties` | 管理员 |
+| 17 | GET | `/admin/penalties/{id}` | 管理员 |
+| 18 | PUT | `/admin/penalties/{id}/revoke` | 管理员 |
+| 19 | POST | `/appeals` | 登录用户 |
+| 20 | GET | `/appeals/appealable/evaluations` | 登录用户 |
+| 21 | GET | `/appeals/appealable/penalties` | 登录用户 |
+| 22 | GET | `/appeals/my` | 登录用户 |
+| 23 | GET | `/appeals/{id}` | 登录用户（仅本人） |
+| 24 | GET | `/admin/appeals` | 管理员 |
+| 25 | GET | `/admin/appeals/{id}` | 管理员 |
+| 26 | PUT | `/admin/appeals/{id}/handle` | 管理员 |
+| 27 | GET | `/admin/evaluations/pending` | 管理员 |
+| 28 | POST | `/admin/evaluations/{id}/review` | 管理员 |
 
 > 以上路径均相对于 Base URL `http://localhost:8080/api`，完整 URL 需加前缀 `/api`。
 
@@ -177,7 +178,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 ---
 
-### 二、板块管理 — 管理端（5 个）
+### 二、板块管理 — 管理端（6 个）
 
 前缀：`/api/admin/boards`，均需管理员 Token。
 
@@ -224,6 +225,28 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 `GET /api/admin/boards`
 
 **说明**：包含 `active` 和 `inactive` 全部状态。
+
+#### 7. 获取板块下的项目列表
+
+`GET /api/admin/boards/{id}/projects`
+
+**说明**：管理后台查看某板块下引用了哪些项目，按 `createdAt` 倒序；无项目时返回空数组。
+
+**响应 data 示例**：
+```json
+[
+  {
+    "id": 10,
+    "creatorId": 2,
+    "title": "后端实训",
+    "status": "recruiting",
+    "maxMembers": 5,
+    "createdAt": "2026-06-01T10:00:00"
+  }
+]
+```
+
+**错误**：M1002（板块不存在）
 
 ---
 

@@ -2,6 +2,7 @@ package com.teammatch.m6.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.teammatch.m6.dto.BoardCreateDTO;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
 
@@ -67,4 +68,13 @@ public interface BoardService extends IService<Board> {
      * @return true-存在且启用，false-不存在或禁用
      */
     boolean existsActiveBoard(Long boardId);
+
+    /**
+     * 获取板块下的项目列表（管理端）
+     *
+     * @param boardId 板块ID
+     * @return 项目摘要列表
+     * @throws IllegalArgumentException 板块不存在
+     */
+    List<BoardProjectSummaryVO> listProjectsByBoardId(Long boardId);
 }

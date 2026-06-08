@@ -3,6 +3,7 @@ package com.teammatch.m6.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.m6.dto.BoardCreateDTO;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
 import com.teammatch.config.AuthExceptionHandler;
@@ -236,6 +237,36 @@ class BoardControllerTest {
                 .andExpect(jsonPath("$.data.name").value("测试板块"));
 
         verify(boardService).getBoardById(1L);
+    }
+
+    @Test
+    @DisplayName("listBoardProjects: 管理员成功获取板块项目列表")
+    void listBoardProjects_adminSuccess() throws Exception {
+        BoardProjectSummaryVO project = new BoardProjectSummaryVO();
+        project.setId(10L);
+        project.setTitle("后端实训");
+        project.setStatus("recruiting");
+        when(boardService.listProjectsByBoardId(1L)).thenReturn(List.of(project));
+
+        mockMvc.perform(get("/admin/boards/1/projects")
+                        .header("Authorization", ADMIN_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data[0].title").value("后端实训"));
+
+        verify(boardService).listProjectsByBoardId(1L);
+    }
+
+    @Test
+    @DisplayName("listBoardProjects: 板块不存在返回NOT_FOUND")
+    void listBoardProjects_notFound() throws Exception {
+        when(boardService.listProjectsByBoardId(999L))
+                .thenThrow(new IllegalArgumentException("板块不存在: 999"));
+
+        mockMvc.perform(get("/admin/boards/999/projects")
+                        .header("Authorization", ADMIN_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.NOT_FOUND.getCode()));
     }
 
     @Test

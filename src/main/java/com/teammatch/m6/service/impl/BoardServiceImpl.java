@@ -2,6 +2,7 @@ package com.teammatch.m6.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.teammatch.m6.dto.BoardCreateDTO;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
 import com.teammatch.m6.mapper.BoardMapper;
@@ -128,5 +129,14 @@ public class BoardServiceImpl extends ServiceImpl<BoardMapper, Board> implements
         }
         Board board = baseMapper.selectById(boardId);
         return board != null && "active".equals(board.getStatus());
+    }
+
+    @Override
+    public List<BoardProjectSummaryVO> listProjectsByBoardId(Long boardId) {
+        Board board = baseMapper.selectById(boardId);
+        if (board == null) {
+            throw new IllegalArgumentException("板块不存在: " + boardId);
+        }
+        return baseMapper.selectProjectsByBoardId(boardId);
     }
 }

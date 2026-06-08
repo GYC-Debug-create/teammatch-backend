@@ -1,6 +1,7 @@
 package com.teammatch.m6.service;
 
 import com.teammatch.m6.dto.BoardCreateDTO;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
 import com.teammatch.m6.mapper.BoardMapper;
@@ -413,5 +414,36 @@ class BoardServiceTest {
         boolean result = service.existsActiveBoard(null);
 
         assertThat(result).isFalse();
+    }
+
+    // ==================== listProjectsByBoardId ====================
+
+    @Test
+    @DisplayName("listProjectsByBoardId: 返回板块下的项目列表")
+    void listProjectsByBoardId_success() {
+        BoardProjectSummaryVO project = new BoardProjectSummaryVO();
+        project.setId(10L);
+        project.setTitle("后端实训");
+        project.setStatus("recruiting");
+
+        when(boardMapper.selectById(BOARD_ID)).thenReturn(existingBoard);
+        when(boardMapper.selectProjectsByBoardId(BOARD_ID)).thenReturn(List.of(project));
+
+        List<BoardProjectSummaryVO> result = service.listProjectsByBoardId(BOARD_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTitle()).isEqualTo("后端实训");
+    }
+
+    @Test
+    @DisplayName("listProjectsByBoardId: 板块不存在时抛出异常")
+    void listProjectsByBoardId_boardNotFound_throws() {
+        when(boardMapper.selectById(99999L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listProjectsByBoardId(99999L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("板块不存在");
+
+        verify(boardMapper, never()).selectProjectsByBoardId(any());
     }
 }

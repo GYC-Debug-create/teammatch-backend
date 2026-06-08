@@ -3,6 +3,7 @@ package com.teammatch.m6.controller;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.m6.dto.BoardCreateDTO;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.dto.BoardUpdateDTO;
 import com.teammatch.m6.entity.Board;
 import com.teammatch.m6.service.BoardService;
@@ -96,6 +97,22 @@ public class BoardController {
             return Result.fail(ReasonCode.NOT_FOUND);
         }
         return Result.success(board);
+    }
+
+    /**
+     * 获取板块下的项目列表
+     * GET /api/admin/boards/{id}/projects
+     */
+    @GetMapping("/{id}/projects")
+    public Result<List<BoardProjectSummaryVO>> listBoardProjects(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String token) {
+        authUtil.requireAdmin(token);
+        try {
+            return Result.success(boardService.listProjectsByBoardId(id));
+        } catch (IllegalArgumentException e) {
+            return Result.fail(ReasonCode.NOT_FOUND);
+        }
     }
 
     /**

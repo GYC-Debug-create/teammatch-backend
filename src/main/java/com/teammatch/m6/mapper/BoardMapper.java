@@ -1,8 +1,10 @@
 package com.teammatch.m6.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.teammatch.m6.dto.BoardProjectSummaryVO;
 import com.teammatch.m6.entity.Board;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -43,4 +45,14 @@ public interface BoardMapper extends BaseMapper<Board> {
      */
     @Select("SELECT COUNT(*) FROM project WHERE board_id = #{boardId}")
     Long countProjectsByBoardId(Long boardId);
+
+    /**
+     * 查询板块下的项目列表（管理端）
+     *
+     * @param boardId 板块ID
+     * @return 项目摘要列表，按创建时间倒序
+     */
+    @Select("SELECT id, creator_id AS creatorId, title, status, max_members AS maxMembers, created_at AS createdAt " +
+            "FROM project WHERE board_id = #{boardId} ORDER BY created_at DESC")
+    List<BoardProjectSummaryVO> selectProjectsByBoardId(@Param("boardId") Long boardId);
 }
