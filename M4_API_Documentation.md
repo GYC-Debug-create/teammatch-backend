@@ -49,16 +49,17 @@ Authorization: Bearer <JWT Token>  (需要鉴权的接口，M5 互评/信誉接�
 | 14 | GET | `/api/m4/team-requests` | 请求列表（收到/发出） | 否 |
 | 15 | POST | `/api/m4/projects/{id}/exit/self` | 成员主动退出 | 否 |
 | 16 | POST | `/api/m4/projects/{id}/exit/votes` | 队长发起退出投票 | 否 |
-| 17 | GET | `/api/m4/projects/{id}/exit/votes/{voteId}` | 退出投票详情 | 否 |
-| 18 | POST | `/api/m4/projects/{id}/exit/votes/{voteId}/submit` | 提交投票 | 否 |
-| 19 | POST | `/api/m4/projects/{id}/exit/votes/{voteId}/close` | 关闭投票并执行结果 | 否 |
-| 20 | GET | `/api/m5/projects/{id}/evaluation-eligibility` | 检查项目级互评资格 | 是 |
-| 21 | GET | `/api/m5/projects/{id}/members/{targetId}/evaluation-eligibility` | 检查目标级互评资格 | 是 |
-| 22 | GET | `/api/m5/projects/{id}/evaluatable-members` | 可评价成员列表 | 是 |
-| 23 | POST | `/api/m5/evaluations` | 提交互评 | 是 |
-| 24 | GET | `/api/m5/evaluations/received` | 查看收到的互评 | 是 |
-| 25 | GET | `/api/m5/credit/score` | 查看我的信誉分 | 是 |
-| 26 | GET | `/api/m5/credit/changes` | 查看信誉流水（分页） | 是 |
+| 17 | GET | `/api/m4/projects/{id}/exit/votes` | 退出投票列表 | 否 |
+| 18 | GET | `/api/m4/projects/{id}/exit/votes/{voteId}` | 退出投票详情 | 否 |
+| 19 | POST | `/api/m4/projects/{id}/exit/votes/{voteId}/submit` | 提交投票 | 否 |
+| 20 | POST | `/api/m4/projects/{id}/exit/votes/{voteId}/close` | 关闭投票并执行结果 | 否 |
+| 21 | GET | `/api/m5/projects/{id}/evaluation-eligibility` | 检查项目级互评资格 | 是 |
+| 22 | GET | `/api/m5/projects/{id}/members/{targetId}/evaluation-eligibility` | 检查目标级互评资格 | 是 |
+| 23 | GET | `/api/m5/projects/{id}/evaluatable-members` | 可评价成员列表 | 是 |
+| 24 | POST | `/api/m5/evaluations` | 提交互评 | 是 |
+| 25 | GET | `/api/m5/evaluations/received` | 查看收到的互评 | 是 |
+| 26 | GET | `/api/m5/credit/score` | 查看我的信誉分 | 是 |
+| 27 | GET | `/api/m5/credit/changes` | 查看信誉流水（分页） | 是 |
 
 ---
 
@@ -450,7 +451,7 @@ Authorization: Bearer <JWT Token>  (需要鉴权的接口，M5 互评/信誉接�
 ### 三、退出流程模块 (`/m4/projects/{projectId}/exit`)
 
 > Controller：`com.teammatch.m4.controller.ExitVoteController`
-> 任务覆盖：T-136 成员主动退出、T-137 队长发起退出投票、T-138 投票详情、T-139 提交投票、T-140/T-141 关闭投票（事务+幂等+并发保护）
+> 任务覆盖：T-136 成员主动退出、T-137 队长发起退出投票、投票列表、T-138 投票详情、T-139 提交投票、T-140/T-141 关闭投票（事务+幂等+并发保护）
 
 ---
 
@@ -522,7 +523,42 @@ Authorization: Bearer <JWT Token>  (需要鉴权的接口，M5 互评/信誉接�
 
 ---
 
-#### 3. 退出投票详情（T-138）
+#### 3. 退出投票列表
+
+**接口**: `GET /api/m4/projects/{projectId}/exit/votes`
+
+**说明**: 查询指定项目下所有退出投票列表，按创建时间倒序排列。
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": [
+    {
+      "id": 5,
+      "projectId": 123,
+      "targetUserId": 30,
+      "initiatorId": 10,
+      "status": "voting",
+      "penaltyLevel": "malicious",
+      "result": null,
+      "totalVoters": 3,
+      "agreeCount": 1,
+      "disagreeCount": 0,
+      "deadlineAt": "2026-06-02T10:00:00",
+      "createdAt": "2026-06-01T10:00:00"
+    }
+  ]
+}
+```
+
+**业务规则**:
+- 空列表（无投票记录）也正常返回，不报错
+
+---
+
+#### 4. 退出投票详情（T-138）
 
 **接口**: `GET /api/m4/projects/{projectId}/exit/votes/{voteId}`
 
@@ -554,7 +590,7 @@ Authorization: Bearer <JWT Token>  (需要鉴权的接口，M5 互评/信誉接�
 
 ---
 
-#### 4. 提交投票（T-139）
+#### 5. 提交投票（T-139）
 
 **接口**: `POST /api/m4/projects/{projectId}/exit/votes/{voteId}/submit`
 
@@ -583,7 +619,7 @@ Authorization: Bearer <JWT Token>  (需要鉴权的接口，M5 互评/信誉接�
 
 ---
 
-#### 5. 关闭投票并执行结果（T-140/T-141）
+#### 6. 关闭投票并执行结果（T-140/T-141）
 
 **接口**: `POST /api/m4/projects/{projectId}/exit/votes/{voteId}/close?operatorId={operatorId}`
 

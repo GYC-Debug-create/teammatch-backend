@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
-import com.teammatch.m4.entity.ExitVote;
+import com.teammatch.m4.dto.ExitVoteVO;
 import com.teammatch.m4.service.ExitVoteService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,12 +75,12 @@ class ExitVoteControllerTest {
         dto.setReason("长期失联");
         dto.setPenaltyLevel("negotiated");
 
-        ExitVote vote = new ExitVote();
-        vote.setId(10L);
-        vote.setProjectId(1L);
-        vote.setStatus("voting");
+        ExitVoteVO vo = new ExitVoteVO();
+        vo.setId(10L);
+        vo.setProjectId(1L);
+        vo.setStatus("voting");
 
-        when(exitVoteService.initiateVote(eq(1L), any(ExitVoteCreateDTO.class))).thenReturn(vote);
+        when(exitVoteService.initiateVote(eq(1L), any(ExitVoteCreateDTO.class))).thenReturn(vo);
 
         mockMvc.perform(post("/m4/projects/1/exit/votes")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -147,12 +147,12 @@ class ExitVoteControllerTest {
     @Test
     @DisplayName("getVoteDetail: 查询成功时返回统一 Result JSON")
     void getVoteDetail_success_returnsResultJson() throws Exception {
-        ExitVote vote = new ExitVote();
-        vote.setId(10L);
-        vote.setProjectId(1L);
-        vote.setStatus("voting");
+        ExitVoteVO vo = new ExitVoteVO();
+        vo.setId(10L);
+        vo.setProjectId(1L);
+        vo.setStatus("voting");
 
-        when(exitVoteService.getVoteDetail(10L)).thenReturn(vote);
+        when(exitVoteService.getVoteDetail(10L)).thenReturn(vo);
 
         mockMvc.perform(get("/m4/projects/1/exit/votes/10"))
                 .andExpect(status().isOk())
@@ -233,12 +233,12 @@ class ExitVoteControllerTest {
     @Test
     @DisplayName("closeVote: 成功时返回关闭后的投票")
     void closeVote_success_returnsVote() throws Exception {
-        ExitVote vote = new ExitVote();
-        vote.setId(10L);
-        vote.setStatus("closed");
-        vote.setResult("pass");
+        ExitVoteVO vo = new ExitVoteVO();
+        vo.setId(10L);
+        vo.setStatus("closed");
+        vo.setResult("pass");
 
-        when(exitVoteService.closeVote(10L, 1L)).thenReturn(vote);
+        when(exitVoteService.closeVote(10L, 1L)).thenReturn(vo);
 
         mockMvc.perform(post("/m4/projects/1/exit/votes/10/close")
                         .param("operatorId", "1"))

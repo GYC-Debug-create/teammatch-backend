@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.teammatch.entity.CreditChange;
 import com.teammatch.m4.dto.ExitVoteCreateDTO;
 import com.teammatch.m4.dto.ExitVoteSubmitDTO;
+import com.teammatch.m4.dto.ExitVoteVO;
 import com.teammatch.m4.entity.ExitVote;
 import com.teammatch.m4.entity.ExitVoteRecord;
 import com.teammatch.m4.entity.TeamMember;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * T-136~T-141: 退出流程实现
@@ -119,7 +121,7 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ExitVote initiateVote(Long projectId, ExitVoteCreateDTO dto) {
+    public ExitVoteVO initiateVote(Long projectId, ExitVoteCreateDTO dto) {
         // 校验项目必须是 in_progress
         Project project = projectService.getById(projectId);
         if (project == null) {
@@ -174,20 +176,20 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
         vote.setCreatedAt(LocalDateTime.now());
         vote.setUpdatedAt(LocalDateTime.now());
         this.save(vote);
-        return vote;
+        return toVO(vote);
     }
 
     // ------------------------------------------------------------------ T-138
     /** 返回投票详情（含统计），懒检查 deadline */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ExitVote getVoteDetail(Long voteId) {
+    public ExitVoteVO getVoteDetail(Long voteId) {
         ExitVote vote = this.getById(voteId);
         if (vote == null) {
             throw new RuntimeException("投票不存在");
         }
         lazyCloseIfDeadlinePassed(vote);
-        return vote;
+        return toVO(vote);
     }
 
     // ------------------------------------------------------------------ T-139
@@ -249,19 +251,32 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ExitVote closeVote(Long voteId, Long operatorId) {
+    public ExitVoteVO closeVote(Long voteId, Long operatorId) {
         ExitVote vote = baseMapper.selectByIdForUpdate(voteId);
         if (vote == null) {
             throw new RuntimeException("投票不存在");
         }
         if (!"voting".equals(vote.getStatus())) {
-            return vote; // T-141 幂等：已关闭直接返回
+            return toVO(vote); // T-141 幂等：已关闭直接返回
         }
         if (!vote.getInitiatorId().equals(operatorId)) {
             throw new RuntimeException("只有发起人可以关闭投票");
         }
         doCloseVote(vote);
-        return vote;
+        return toVO(vote);
+    }
+
+    // ------------------------------------------------------------------ 投票列表
+
+    /**
+     * 查询项目下所有退出投票列表（按创建时间倒序）。
+     */
+    @Override
+    public List<ExitVoteVO> getVoteList(Long projectId) {
+        return this.list(new LambdaQueryWrapper<ExitVote>()
+                .eq(ExitVote::getProjectId, projectId)
+                .orderByDesc(ExitVote::getCreatedAt))
+                .stream().map(this::toVO).collect(Collectors.toList());
     }
 
     // ------------------------------------------------------------------ helper: close vote core
@@ -372,5 +387,26 @@ public class ExitVoteServiceImpl extends ServiceImpl<M4ExitVoteMapper, ExitVote>
                 .eq(TeamMember::getProjectId, projectId)
                 .eq(TeamMember::getUserId, userId)
                 .eq(TeamMember::getStatus, "active"));
+    }
+
+    // ------------------------------------------------------------------ helper: Entity → VO
+
+    private ExitVoteVO toVO(ExitVote entity) {
+        ExitVoteVO vo = new ExitVoteVO();
+        vo.setId(entity.getId());
+        vo.setProjectId(entity.getProjectId());
+        vo.setTargetUserId(entity.getTargetUserId());
+        vo.setInitiatorId(entity.getInitiatorId());
+        vo.setStatus(entity.getStatus());
+        vo.setPenaltyLevel(entity.getPenaltyLevel());
+        vo.setResult(entity.getResult());
+        vo.setReason(entity.getReason());
+        vo.setTotalVoters(entity.getTotalVoters());
+        vo.setAgreeCount(entity.getAgreeCount());
+        vo.setDisagreeCount(entity.getDisagreeCount());
+        vo.setDeadlineAt(entity.getDeadlineAt());
+        vo.setClosedAt(entity.getClosedAt());
+        vo.setCreatedAt(entity.getCreatedAt());
+        return vo;
     }
 }
