@@ -269,12 +269,24 @@ public class AppealServiceImpl implements AppealService {
      */
     private void executeApprovedSideEffects(Appeal appeal, AppealHandleDTO dto) {
         if ("penalty".equals(appeal.getTargetType())) {
+            Penalty penalty = penaltyMapper.selectById(appeal.getTargetId());
+            if (penalty == null) {
+                throw new IllegalArgumentException("处罚记录不存在: " + appeal.getTargetId());
+            }
+            if ("revoked".equals(penalty.getStatus())) {
+                log.info("处罚已撤销，跳过重复撤销: appealId={}, penaltyId={}",
+                        appeal.getId(), appeal.getTargetId());
+                return;
+            }
+
             PenaltyRevokeDTO revokeDTO = new PenaltyRevokeDTO();
             revokeDTO.setReason("申诉通过: " + (dto.getHandleResult() != null ? dto.getHandleResult() : "经审核，撤销处罚"));
 
             try {
                 penaltyService.revokePenalty(appeal.getTargetId(), appeal.getHandlerId(), revokeDTO);
                 log.info("处罚撤销成功: appealId={}, penaltyId={}", appeal.getId(), appeal.getTargetId());
+            } catch (IllegalArgumentException | IllegalStateException | BusinessException e) {
+                throw e;
             } catch (Exception e) {
                 log.error("处罚撤销失败: appealId={}, penaltyId={}", appeal.getId(), appeal.getTargetId(), e);
                 throw new RuntimeException("处罚撤销失败: " + e.getMessage(), e);

@@ -498,6 +498,7 @@ class AppealServiceTest {
         penaltyAppeal.setStatus("pending");
 
         when(appealMapper.selectById(APPEAL_ID)).thenReturn(penaltyAppeal);
+        when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
         when(penaltyService.revokePenalty(anyLong(), anyLong(), any(PenaltyRevokeDTO.class))).thenReturn(activePenalty);
 
         AppealHandleDTO dto = new AppealHandleDTO();
@@ -576,6 +577,7 @@ class AppealServiceTest {
         penaltyAppeal.setStatus("pending");
 
         when(appealMapper.selectById(APPEAL_ID)).thenReturn(penaltyAppeal);
+        when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
         when(penaltyService.revokePenalty(anyLong(), anyLong(), any(PenaltyRevokeDTO.class)))
                 .thenThrow(new RuntimeException("处罚撤销失败"));
 
@@ -599,6 +601,7 @@ class AppealServiceTest {
         penaltyAppeal.setStatus("pending");
 
         when(appealMapper.selectById(APPEAL_ID)).thenReturn(penaltyAppeal);
+        when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
         when(penaltyService.revokePenalty(anyLong(), anyLong(), any(PenaltyRevokeDTO.class))).thenReturn(activePenalty);
 
         AppealHandleDTO dto = new AppealHandleDTO();
@@ -609,6 +612,57 @@ class AppealServiceTest {
 
         assertThat(result.getStatus()).isEqualTo("approved");
         verify(penaltyService).revokePenalty(eq(PENALTY_ID), eq(ADMIN_ID), any(PenaltyRevokeDTO.class));
+    }
+
+    @Test
+    @DisplayName("handleAppeal: 处罚已撤销时批准申诉应成功且跳过重复撤销")
+    void handleAppeal_penaltyAlreadyRevoked_approved_success() {
+        Appeal penaltyAppeal = new Appeal();
+        penaltyAppeal.setId(APPEAL_ID);
+        penaltyAppeal.setUserId(USER_ID);
+        penaltyAppeal.setTargetType("penalty");
+        penaltyAppeal.setTargetId(PENALTY_ID);
+        penaltyAppeal.setStatus("pending");
+
+        Penalty revokedPenalty = new Penalty();
+        revokedPenalty.setId(PENALTY_ID);
+        revokedPenalty.setStatus("revoked");
+
+        when(appealMapper.selectById(APPEAL_ID)).thenReturn(penaltyAppeal);
+        when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(revokedPenalty);
+
+        AppealHandleDTO dto = new AppealHandleDTO();
+        dto.setStatus("approved");
+        dto.setHandleResult("申诉通过");
+
+        Appeal result = appealService.handleAppeal(APPEAL_ID, ADMIN_ID, dto);
+
+        assertThat(result.getStatus()).isEqualTo("approved");
+        verify(penaltyService, never()).revokePenalty(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("handleAppeal: 处罚撤销冲突应透传 IllegalStateException")
+    void handleAppeal_penaltyRevokeConflict_throwsIllegalState() {
+        Appeal penaltyAppeal = new Appeal();
+        penaltyAppeal.setId(APPEAL_ID);
+        penaltyAppeal.setUserId(USER_ID);
+        penaltyAppeal.setTargetType("penalty");
+        penaltyAppeal.setTargetId(PENALTY_ID);
+        penaltyAppeal.setStatus("pending");
+
+        when(appealMapper.selectById(APPEAL_ID)).thenReturn(penaltyAppeal);
+        when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
+        when(penaltyService.revokePenalty(anyLong(), anyLong(), any(PenaltyRevokeDTO.class)))
+                .thenThrow(new IllegalStateException("处罚已撤销，无法重复撤销"));
+
+        AppealHandleDTO dto = new AppealHandleDTO();
+        dto.setStatus("approved");
+        dto.setHandleResult("申诉通过");
+
+        assertThatThrownBy(() -> appealService.handleAppeal(APPEAL_ID, ADMIN_ID, dto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("处罚已撤销，无法重复撤销");
     }
 
     // ==================== getAppealById ====================
