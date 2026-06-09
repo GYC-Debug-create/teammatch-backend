@@ -9,6 +9,7 @@ import com.teammatch.entity.TechProfile;
 import com.teammatch.entity.User;
 import com.teammatch.mapper.TechProfileMapper;
 import com.teammatch.mapper.UserMapper;
+
 import com.teammatch.service.TechProfileService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+
 
 import java.util.*;
 
@@ -44,7 +46,6 @@ public class TechProfileServiceImpl implements TechProfileService {
     private ObjectMapper objectMapper;
 
     @Override
-    @Transactional
     public TechProfile generateOrUpdateProfile(String githubUsername) {
         // 1. 查询是否已存在
         LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
@@ -52,11 +53,6 @@ public class TechProfileServiceImpl implements TechProfileService {
         TechProfile existing = techProfileMapper.selectOne(wrapper);
 
         if (existing != null) {
-            // 已有记录：异步同步 GitHub 数据
-            existing.setSyncStatus("pending");
-            techProfileMapper.updateById(existing);
-            log.info("触发技术画像异步同步: githubUsername={}", githubUsername);
-            gitHubSyncService.syncGitHubDataAsync(existing.getId(), githubUsername);
             return existing;
         }
 
@@ -77,8 +73,7 @@ public class TechProfileServiceImpl implements TechProfileService {
             techProfileMapper.insert(profile);
             log.info("创建技术画像占位: githubUsername={}, id={}", githubUsername, profile.getId());
 
-            // 异步拉取 GitHub 数据
-            gitHubSyncService.syncGitHubDataAsync(profile.getId(), githubUsername);
+            // 同步在 triggerAsyncSync 中触发（由调用方在事务外调用）
         } catch (DuplicateKeyException e) {
             // 并发下另一个线程已创建，查询已存在的记录
             LambdaQueryWrapper<TechProfile> retryWrapper = new LambdaQueryWrapper<>();
@@ -190,5 +185,38 @@ public class TechProfileServiceImpl implements TechProfileService {
         return techProfileMapper.selectCount(null);
     }
 
-    // fetchGitHubData / fetchGitHubUser / fetchGitHubRepos 已移至 GitHubSyncService
+
+    /**
+     * 事务提交后触发异步同步（由调用方确保事务已提交）
+     * 此方法无 @Transactional，保证 @Async 在事务外执行
+     */
+    @Override
+    public com.teammatch.entity.TechProfile findByGithubUsername(String githubUsername) {
+        LambdaQueryWrapper<com.teammatch.entity.TechProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(com.teammatch.entity.TechProfile::getGithubUsername, githubUsername);
+        return techProfileMapper.selectOne(wrapper);
+    }
+
+    @Override
+    public void updateTechProfile(com.teammatch.entity.TechProfile profile) {
+        techProfileMapper.updateById(profile);
+    }
+
+    @Override
+    public void deleteTechProfile(com.teammatch.entity.TechProfile profile) {
+        techProfileMapper.deleteById(profile.getId());
+    }
+
+    @Override
+    public void triggerAsyncSync(String githubUsername) {
+        LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        TechProfile profile = techProfileMapper.selectOne(wrapper);
+        if (profile != null) {
+            profile.setSyncStatus("pending");
+            techProfileMapper.updateById(profile);
+            log.info("触发技术画像异步同步: githubUsername={}", githubUsername);
+            gitHubSyncService.syncGitHubDataAsync(profile.getId(), githubUsername);
+        }
+    }
 }

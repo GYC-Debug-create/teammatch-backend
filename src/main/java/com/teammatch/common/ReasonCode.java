@@ -25,6 +25,8 @@ public enum ReasonCode {
     INVALID_EMAIL("M3023", "邮箱格式不正确"),
     EMAIL_SEND_FAILED("M3024", "邮件发送失败，请稍后重试"),
     EMAIL_ALREADY_VERIFIED("M3028", "该邮箱已认证，无需重复绑定"),
+    GITHUB_USER_NOT_FOUND("M3029", "GitHub 用户不存在"),
+    GITHUB_ALREADY_BOUND("M3030", "已绑定 GitHub 账号，请使用更新接口"),
     USERNAME_OCCUPIED("M3005", "该用户名已被占用"),
     USERNAME_ALREADY_BOUND("M3006", "用户名已绑定，请使用修改接口"),
     PASSWORD_TOO_SHORT("M3007", "密码长度不能少于6位"),

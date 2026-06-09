@@ -51,4 +51,25 @@ public interface TechProfileService {
      * 获取排行榜总数
      */
     long getLeaderboardCount();
+
+    /**
+     * 事务提交后触发异步同步 GitHub 数据
+     * 由调用方在事务外调用，确保 @Async 能读到已提交的数据
+     */
+    void triggerAsyncSync(String githubUsername);
+
+    /**
+     * 根据 GitHub 用户名查找技术画像
+     */
+    com.teammatch.entity.TechProfile findByGithubUsername(String githubUsername);
+
+    /**
+     * 更新技术画像
+     */
+    void updateTechProfile(com.teammatch.entity.TechProfile profile);
+
+    /**
+     * 删除技术画像
+     */
+    void deleteTechProfile(com.teammatch.entity.TechProfile profile);
 }

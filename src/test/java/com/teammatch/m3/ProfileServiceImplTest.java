@@ -10,7 +10,10 @@ import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.SkillTagMapper;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.mapper.UserSkillMapper;
+import com.teammatch.service.TechProfileService;
 import com.teammatch.service.impl.ProfileServiceImpl;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +29,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.*;
@@ -48,6 +52,15 @@ class ProfileServiceImplTest {
 
     @Mock
     private UserSkillMapper userSkillMapper;
+
+    @Mock
+    private TechProfileService techProfileService;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private RestTemplate restTemplate;
 
     @InjectMocks
     private ProfileServiceImpl profileService;
@@ -125,6 +138,11 @@ class ProfileServiceImplTest {
         User user = new User();
         user.setId(TEST_USER_ID);
         when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"login\":\"github-user\"}");
 
         profileService.bindGithub(TEST_USER_ID, "github-user");
 
@@ -136,7 +154,11 @@ class ProfileServiceImplTest {
     @Test
     @DisplayName("绑定 GitHub - 用户不存在时应静默返回")
     void bindGithub_userNotFound_shouldDoNothing() {
-        when(userMapper.selectById(TEST_USER_ID)).thenReturn(null);
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+        lenient().when(userMapper.selectById(TEST_USER_ID)).thenReturn(null);
         
         profileService.bindGithub(TEST_USER_ID, "github-user");
         
@@ -362,13 +384,78 @@ class ProfileServiceImplTest {
         User user = new User();
         user.setId(TEST_USER_ID);
         user.setGithubClaimed(true);
+        user.setGithubUsername("old-github");
         
         when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+        when(techProfileService.findByGithubUsername(anyString())).thenReturn(null);
+        when(techProfileService.claimProfile(anyString(), anyLong())).thenReturn(new com.teammatch.entity.TechProfile());
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"login\":\"new-username\"}");
 
         profileService.updateGithub(TEST_USER_ID, "new-username");
         
         verify(userMapper).updateById(user);
         assertThat(user.getGithubUsername()).isEqualTo("new-username");
+    }
+
+    @Test
+    @DisplayName("绑定 GitHub - 已绑定相同账号应静默返回")
+    void bindGithub_sameAccount_shouldDoNothing() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGithubClaimed(true);
+        user.setGithubUsername("same-github");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        profileService.bindGithub(TEST_USER_ID, "same-github");
+        
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("绑定 GitHub - 已绑定不同账号应抛异常")
+    void bindGithub_alreadyBound_shouldThrow() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGithubClaimed(true);
+        user.setGithubUsername("existing-github");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        assertThatThrownBy(() -> profileService.bindGithub(TEST_USER_ID, "new-github"))
+                .isInstanceOf(com.teammatch.exception.ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("更新 GitHub - 未绑定应抛异常")
+    void updateGithub_notBound_shouldThrow() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGithubClaimed(false);
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        assertThatThrownBy(() -> profileService.updateGithub(TEST_USER_ID, "any-github"))
+                .isInstanceOf(com.teammatch.exception.ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("更新 GitHub - 相同账号应静默返回")
+    void updateGithub_sameAccount_shouldDoNothing() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGithubClaimed(true);
+        user.setGithubUsername("same-github");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        profileService.updateGithub(TEST_USER_ID, "same-github");
+        
+        verify(userMapper, never()).updateById(any());
     }
 
     // ==================== 获取用户档案 (getProfileById) ====================

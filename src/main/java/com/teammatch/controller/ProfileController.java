@@ -141,6 +141,8 @@ public class ProfileController {
         } catch (NotFoundException e) {
             // GitHub 账号未绑定
             return Result.fail(e.getReasonCode());
+        } catch (com.teammatch.exception.ValidationException e) {
+            return Result.fail(e.getReasonCode());
         } catch (Exception e) {
             // 未知异常
             return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
