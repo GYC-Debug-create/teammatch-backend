@@ -1,5 +1,7 @@
 package com.teammatch.m6.service;
 
+import com.teammatch.common.ReasonCode;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.constants.PenaltyType;
 import com.teammatch.m6.dto.PenaltyCreateDTO;
 import com.teammatch.m6.dto.ReportCreateDTO;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -320,6 +323,175 @@ class ReportServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("penaltyType");
         verify(reportMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("handleReport: 联动处罚时不能处罚自己")
+    void handleReport_selfPenalty_throws() {
+        pendingReport.setTargetId(HANDLER_ID);
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+        when(penaltyService.createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class)))
+                .thenThrow(new BusinessException(ReasonCode.PENALTY_SELF_NOT_ALLOWED));
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.FUNCTION_LIMIT);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getReasonCode())
+                        .isEqualTo(ReasonCode.PENALTY_SELF_NOT_ALLOWED));
+    }
+
+    @Test
+    @DisplayName("handleReport: resolved且createPenalty联动创建function_limit处罚")
+    void handleReport_resolveWithFunctionLimitPenalty_success() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+        Penalty penalty = new Penalty();
+        penalty.setId(11L);
+        when(penaltyService.createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class))).thenReturn(penalty);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.FUNCTION_LIMIT);
+
+        service.handleReport(REPORT_ID, HANDLER_ID, dto);
+
+        ArgumentCaptor<PenaltyCreateDTO> captor = ArgumentCaptor.forClass(PenaltyCreateDTO.class);
+        verify(penaltyService).createPenalty(eq(HANDLER_ID), captor.capture());
+        PenaltyCreateDTO captured = captor.getValue();
+        assertThat(captured.getUserId()).isEqualTo(pendingReport.getTargetId());
+        assertThat(captured.getType()).isEqualTo(PenaltyType.FUNCTION_LIMIT);
+        assertThat(captured.getRelatedReportId()).isEqualTo(REPORT_ID);
+        assertThat(captured.getReason()).isEqualTo(pendingReport.getReason());
+    }
+
+    @Test
+    @DisplayName("handleReport: 联动处罚使用自定义penaltyReason")
+    void handleReport_resolveWithPenalty_usesCustomPenaltyReason() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+        when(penaltyService.createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class))).thenReturn(new Penalty());
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(8);
+        dto.setPenaltyReason("多次恶意刷屏");
+
+        service.handleReport(REPORT_ID, HANDLER_ID, dto);
+
+        ArgumentCaptor<PenaltyCreateDTO> captor = ArgumentCaptor.forClass(PenaltyCreateDTO.class);
+        verify(penaltyService).createPenalty(eq(HANDLER_ID), captor.capture());
+        assertThat(captor.getValue().getReason()).isEqualTo("多次恶意刷屏");
+        assertThat(captor.getValue().getCreditDeductValue()).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("handleReport: resolved但未开启createPenalty不联动处罚")
+    void handleReport_resolvedWithoutCreatePenalty_noPenaltyCreated() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+
+        service.handleReport(REPORT_ID, HANDLER_ID, dto);
+
+        verify(penaltyService, never()).createPenalty(any(), any());
+    }
+
+    @Test
+    @DisplayName("handleReport: dismissed且createPenalty=true不联动处罚")
+    void handleReport_dismissedWithCreatePenaltyFlag_noPenaltyCreated() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("dismissed");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(5);
+
+        service.handleReport(REPORT_ID, HANDLER_ID, dto);
+
+        verify(penaltyService, never()).createPenalty(any(), any());
+    }
+
+    @Test
+    @DisplayName("handleReport: 非法penaltyType抛出异常")
+    void handleReport_invalidPenaltyType_throws() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType("ban_forever");
+        dto.setCreditDeductValue(5);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("penaltyType 必须是");
+        verify(reportMapper, never()).updateById(any());
+        verify(penaltyService, never()).createPenalty(any(), any());
+    }
+
+    @Test
+    @DisplayName("handleReport: credit_deduct缺少creditDeductValue抛出异常")
+    void handleReport_creditDeductMissingValue_throws() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("creditDeductValue");
+        verify(reportMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("handleReport: credit_deduct扣分值非正数抛出异常")
+    void handleReport_creditDeductNonPositiveValue_throws() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(0);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("creditDeductValue");
+        verify(reportMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("handleReport: 联动创建处罚失败包装为RuntimeException")
+    void handleReport_createPenaltyFails_wrappedRuntimeException() {
+        when(reportMapper.selectById(REPORT_ID)).thenReturn(pendingReport);
+        when(reportMapper.updateById(any(Report.class))).thenReturn(1);
+        when(penaltyService.createPenalty(eq(HANDLER_ID), any(PenaltyCreateDTO.class)))
+                .thenThrow(new IllegalStateException("写入 credit_change 流水失败"));
+
+        ReportHandleDTO dto = new ReportHandleDTO();
+        dto.setStatus("resolved");
+        dto.setCreatePenalty(true);
+        dto.setPenaltyType(PenaltyType.CREDIT_DEDUCT);
+        dto.setCreditDeductValue(5);
+
+        assertThatThrownBy(() -> service.handleReport(REPORT_ID, HANDLER_ID, dto))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("创建处罚失败")
+                .hasCauseInstanceOf(IllegalStateException.class);
     }
 
     @Test

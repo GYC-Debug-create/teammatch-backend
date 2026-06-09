@@ -701,6 +701,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 | M1004 | 无权访问 | 查看他人申诉 |
 | M3000 | 未授权 | Token 缺失/无效/过期 |
 | M3009 | 需要管理员权限 | 普通用户访问 /admin/* |
+| M6001 | 不能对自己执行处罚 | 管理员创建 function_limit/credit_deduct 时 target 为自己 |
 | M5005 | 评价不存在 | 复核目标无效 |
 | M5006 | 信誉流水不存在 | 复核时找不到挂起流水 |
 | M5007 | 无效复核 action | action 不是三种合法值 |

@@ -20,6 +20,7 @@ public interface PenaltyService extends IService<Penalty> {
      * @param adminId 执行处罚的管理员ID
      * @param dto 处罚请求
      * @return 创建的处罚记录
+     * @throws com.teammatch.exception.BusinessException 若管理员尝试处罚自己
      */
     Penalty createPenalty(Long adminId, PenaltyCreateDTO dto);
 

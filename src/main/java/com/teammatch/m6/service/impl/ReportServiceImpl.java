@@ -7,6 +7,7 @@ import com.teammatch.m6.dto.ReportCreateDTO;
 import com.teammatch.m6.dto.ReportHandleDTO;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.mapper.ReportMapper;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.m6.service.ReportService;
 import lombok.RequiredArgsConstructor;
@@ -128,6 +129,8 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> impleme
         try {
             penaltyService.createPenalty(handlerId, penaltyDTO);
             log.info("根据举报创建处罚成功: reportId={}, userId={}", report.getId(), report.getTargetId());
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("根据举报创建处罚失败: reportId={}", report.getId(), e);
             throw new RuntimeException("创建处罚失败: " + e.getMessage(), e);

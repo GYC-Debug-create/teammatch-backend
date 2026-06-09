@@ -2,6 +2,7 @@ package com.teammatch.m6.controller;
 
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.dto.PenaltyCreateDTO;
 import com.teammatch.m6.dto.PenaltyRevokeDTO;
 import com.teammatch.m6.entity.Penalty;
@@ -9,6 +10,7 @@ import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/penalties")
 @RequiredArgsConstructor
+@Slf4j
 public class PenaltyAdminController {
 
     private final PenaltyService penaltyService;
@@ -41,8 +44,13 @@ public class PenaltyAdminController {
         try {
             Penalty penalty = penaltyService.createPenalty(adminId, dto);
             return Result.success(penalty);
+        } catch (BusinessException e) {
+            return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
         } catch (IllegalArgumentException e) {
-            return Result.fail(ReasonCode.PARAM_ERROR);
+            return Result.of(ReasonCode.PARAM_ERROR.getCode(), e.getMessage(), null);
+        } catch (RuntimeException e) {
+            log.error("createPenalty failed, adminId={}, targetUserId={}", adminId, dto.getUserId(), e);
+            return Result.fail(ReasonCode.UNKNOWN_ERROR);
         }
     }
 
@@ -91,9 +99,18 @@ public class PenaltyAdminController {
             Penalty penalty = penaltyService.revokePenalty(id, adminId, dto);
             return Result.success(penalty);
         } catch (IllegalArgumentException e) {
-            return Result.fail(ReasonCode.NOT_FOUND);
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("不存在")) {
+                return Result.of(ReasonCode.NOT_FOUND.getCode(), msg, null);
+            }
+            return Result.of(ReasonCode.PARAM_ERROR.getCode(), msg != null ? msg : ReasonCode.PARAM_ERROR.getMessage(), null);
         } catch (IllegalStateException e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return Result.of(ReasonCode.STATUS_CONFLICT.getCode(), e.getMessage(), null);
+        } catch (BusinessException e) {
+            return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
+        } catch (RuntimeException e) {
+            log.error("revokePenalty failed, penaltyId={}, adminId={}", id, adminId, e);
+            return Result.fail(ReasonCode.UNKNOWN_ERROR);
         }
     }
 }

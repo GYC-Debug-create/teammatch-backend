@@ -2,6 +2,8 @@ package com.teammatch.m6.service;
 
 import com.teammatch.entity.CreditChange;
 import com.teammatch.entity.User;
+import com.teammatch.common.ReasonCode;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.CreditChangeMapper;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.m6.constants.CreditChangeType;
@@ -99,6 +101,22 @@ class PenaltyServiceTest {
     }
 
     // ==================== createPenalty ====================
+
+    @Test
+    @DisplayName("createPenalty: 不能对自己执行处罚")
+    void createPenalty_selfPenalty_throws() {
+        PenaltyCreateDTO dto = new PenaltyCreateDTO();
+        dto.setUserId(ADMIN_ID);
+        dto.setType("function_limit");
+        dto.setReason("测试自罚");
+
+        assertThatThrownBy(() -> service.createPenalty(ADMIN_ID, dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getReasonCode())
+                        .isEqualTo(ReasonCode.PENALTY_SELF_NOT_ALLOWED));
+
+        verify(penaltyMapper, never()).insert(any(Penalty.class));
+    }
 
     @Test
     @DisplayName("createPenalty: 正常创建credit_deduct处罚")

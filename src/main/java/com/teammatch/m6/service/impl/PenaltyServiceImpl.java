@@ -1,8 +1,10 @@
 package com.teammatch.m6.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.teammatch.common.ReasonCode;
 import com.teammatch.entity.CreditChange;
 import com.teammatch.entity.User;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.mapper.CreditChangeMapper;
 import com.teammatch.mapper.UserMapper;
 import com.teammatch.m6.constants.CreditChangeType;
@@ -13,11 +15,13 @@ import com.teammatch.m6.entity.Penalty;
 import com.teammatch.m6.mapper.PenaltyMapper;
 import com.teammatch.m6.service.PenaltyService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 处罚记录 Service 实现类
@@ -32,6 +36,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PenaltyServiceImpl extends ServiceImpl<PenaltyMapper, Penalty> implements PenaltyService {
 
     private static final String PENALTY_STATUS_ACTIVE = "active";
@@ -45,6 +50,12 @@ public class PenaltyServiceImpl extends ServiceImpl<PenaltyMapper, Penalty> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Penalty createPenalty(Long adminId, PenaltyCreateDTO dto) {
+        if (Objects.equals(adminId, dto.getUserId())) {
+            log.warn("管理员尝试对自己执行处罚: adminId={}, type={}, relatedReportId={}",
+                    adminId, dto.getType(), dto.getRelatedReportId());
+            throw new BusinessException(ReasonCode.PENALTY_SELF_NOT_ALLOWED);
+        }
+
         if (PenaltyType.CREDIT_DEDUCT.equals(dto.getType())) {
             if (dto.getCreditDeductValue() == null || dto.getCreditDeductValue() <= 0) {
                 throw new IllegalArgumentException("credit_deduct类型的处罚必须指定有效的扣分值（大于0）");

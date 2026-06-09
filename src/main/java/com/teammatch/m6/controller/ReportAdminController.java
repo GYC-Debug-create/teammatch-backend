@@ -2,6 +2,7 @@ package com.teammatch.m6.controller;
 
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.dto.ReportHandleDTO;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.service.ReportService;
@@ -81,6 +82,8 @@ public class ReportAdminController {
         } catch (IllegalStateException e) {
             return Result.of(ReasonCode.STATUS_CONFLICT.getCode(),
                     e.getMessage() != null ? e.getMessage() : ReasonCode.STATUS_CONFLICT.getMessage(), null);
+        } catch (BusinessException e) {
+            return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
         } catch (RuntimeException e) {
             log.error("handleReport failed, reportId={}, handlerId={}", id, handlerId, e);
             return Result.fail(ReasonCode.UNKNOWN_ERROR);

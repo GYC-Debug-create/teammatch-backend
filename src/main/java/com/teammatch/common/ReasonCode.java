@@ -84,6 +84,9 @@ public enum ReasonCode {
     INVALID_PENALTY_LEVEL("INVALID_PENALTY_LEVEL", "处罚级别缺失或不合法"),
     M4_TEAM_VOTE_CONFLICT("TEAM_VOTE_CONFLICT", "退出操作冲突，请重试"),
 
+    // M6 治理错误（M60xx）
+    PENALTY_SELF_NOT_ALLOWED("M6001", "不能对自己执行处罚"),
+
     // 申诉恢复错误（M50xx）
     APPEAL_NOT_FOUND("M5009", "申诉记录不存在"),
     APPEAL_NOT_APPROVED("M5010", "申诉尚未通过审批"),

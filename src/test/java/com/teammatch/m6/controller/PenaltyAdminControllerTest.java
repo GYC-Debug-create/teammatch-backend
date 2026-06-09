@@ -8,6 +8,7 @@ import com.teammatch.m6.entity.Penalty;
 import com.teammatch.config.AuthExceptionHandler;
 import com.teammatch.exception.AuthenticationException;
 import com.teammatch.exception.AuthorizationException;
+import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,6 +94,7 @@ class PenaltyAdminControllerTest {
         revokedPenalty.setRevokedAt(LocalDateTime.now());
         revokedPenalty.setCreatedAt(LocalDateTime.now().minusDays(3));
 
+        lenient().doNothing().when(authUtil).requireAdmin(ADMIN_TOKEN);
         lenient().when(authUtil.requireUserId(ADMIN_TOKEN)).thenReturn(ADMIN_ID);
     }
 
@@ -213,6 +215,26 @@ class PenaltyAdminControllerTest {
     }
 
     @Test
+    @DisplayName("createPenalty: 不能对自己执行处罚")
+    void createPenalty_selfPenalty_returnsBusinessCode() throws Exception {
+        when(penaltyService.createPenalty(eq(ADMIN_ID), any(PenaltyCreateDTO.class)))
+                .thenThrow(new BusinessException(ReasonCode.PENALTY_SELF_NOT_ALLOWED));
+
+        PenaltyCreateDTO dto = new PenaltyCreateDTO();
+        dto.setUserId(ADMIN_ID);
+        dto.setType("function_limit");
+        dto.setReason("测试自罚");
+
+        mockMvc.perform(post("/admin/penalties")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.PENALTY_SELF_NOT_ALLOWED.getCode()))
+                .andExpect(jsonPath("$.message").value(ReasonCode.PENALTY_SELF_NOT_ALLOWED.getMessage()));
+    }
+
+    @Test
     @DisplayName("createPenalty: 参数校验失败返回400")
     void createPenalty_validationError() throws Exception {
         PenaltyCreateDTO dto = new PenaltyCreateDTO();
@@ -261,7 +283,27 @@ class PenaltyAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value("credit_deduct类型的处罚必须指定扣分值"));
+    }
+
+    @Test
+    @DisplayName("createPenalty: 未知运行时异常返回UNKNOWN_ERROR")
+    void createPenalty_unexpectedRuntimeException_returnsUnknownError() throws Exception {
+        when(penaltyService.createPenalty(eq(ADMIN_ID), any(PenaltyCreateDTO.class)))
+                .thenThrow(new RuntimeException("数据库连接失败"));
+
+        PenaltyCreateDTO dto = new PenaltyCreateDTO();
+        dto.setUserId(USER_ID);
+        dto.setType("function_limit");
+        dto.setReason("违规");
+
+        mockMvc.perform(post("/admin/penalties")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNKNOWN_ERROR.getCode()));
     }
 
     @Test
@@ -406,7 +448,79 @@ class PenaltyAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(ReasonCode.NOT_FOUND.getCode()));
+                .andExpect(jsonPath("$.code").value(ReasonCode.NOT_FOUND.getCode()))
+                .andExpect(jsonPath("$.message").value("处罚记录不存在"));
+    }
+
+    @Test
+    @DisplayName("revokePenalty: 非不存在类IllegalArgumentException返回PARAM_ERROR")
+    void revokePenalty_illegalArgumentWithoutNotFound_returnsParamError() throws Exception {
+        when(penaltyService.revokePenalty(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException("撤销原因格式不合法"));
+
+        PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
+        dto.setReason("申诉通过");
+
+        mockMvc.perform(put("/admin/penalties/1/revoke")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value("撤销原因格式不合法"));
+    }
+
+    @Test
+    @DisplayName("revokePenalty: IllegalArgumentException无message时使用默认PARAM_ERROR文案")
+    void revokePenalty_illegalArgumentNullMessage_returnsDefaultParamErrorMessage() throws Exception {
+        when(penaltyService.revokePenalty(any(), any(), any()))
+                .thenThrow(new IllegalArgumentException());
+
+        PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
+        dto.setReason("申诉通过");
+
+        mockMvc.perform(put("/admin/penalties/1/revoke")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.PARAM_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value(ReasonCode.PARAM_ERROR.getMessage()));
+    }
+
+    @Test
+    @DisplayName("revokePenalty: BusinessException返回对应业务码")
+    void revokePenalty_businessException_returnsBusinessCode() throws Exception {
+        when(penaltyService.revokePenalty(any(), any(), any()))
+                .thenThrow(new BusinessException(ReasonCode.USER_NOT_FOUND, "用户不存在"));
+
+        PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
+        dto.setReason("申诉通过");
+
+        mockMvc.perform(put("/admin/penalties/1/revoke")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.USER_NOT_FOUND.getCode()))
+                .andExpect(jsonPath("$.message").value("用户不存在"));
+    }
+
+    @Test
+    @DisplayName("revokePenalty: 未知运行时异常返回UNKNOWN_ERROR")
+    void revokePenalty_unexpectedRuntimeException_returnsUnknownError() throws Exception {
+        when(penaltyService.revokePenalty(any(), any(), any()))
+                .thenThrow(new RuntimeException("数据库写入失败"));
+
+        PenaltyRevokeDTO dto = new PenaltyRevokeDTO();
+        dto.setReason("申诉通过");
+
+        mockMvc.perform(put("/admin/penalties/1/revoke")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ReasonCode.UNKNOWN_ERROR.getCode()));
     }
 
     @Test
@@ -423,7 +537,8 @@ class PenaltyAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+                .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()))
+                .andExpect(jsonPath("$.message").value("处罚已撤销"));
     }
 
     @Test
