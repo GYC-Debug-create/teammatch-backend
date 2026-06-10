@@ -150,6 +150,45 @@ public class ProfileController {
     }
 
     /**
+     * E2. 绑定 Gitee 账号（手动绑定，非 OAuth 流程）
+     * 路径: POST /api/profile/gitee/bind
+     * 说明: 推荐使用 OAuth 流程 GET /api/profile/gitee/auth，手动绑定无法获取真实 commits/PRs 数据
+     */
+    @PostMapping("/gitee/bind")
+    public Result<Void> bindGitee(@RequestBody java.util.Map<String, String> params,
+                                  @RequestHeader("Authorization") String token) {
+        // 必须登录
+        Long userId = authUtil.requireUserId(token);
+        
+        String giteeUsername = params.get("giteeUsername");
+        profileService.bindGitee(userId, giteeUsername);
+        return Result.success(null);
+    }
+
+    /**
+     * E3. 更新 Gitee 账号
+     * 路径: PUT /api/profile/gitee/update
+     * 说明: 仅当已绑定过 Gitee 账号时可修改，否则返回 M3033 错误
+     */
+    @PutMapping("/gitee/update")
+    public Result<Void> updateGitee(@RequestBody java.util.Map<String, String> params,
+                                    @RequestHeader("Authorization") String token) {
+        try {
+            Long userId = authUtil.requireUserId(token);
+            
+            String giteeUsername = params.get("giteeUsername");
+            profileService.updateGitee(userId, giteeUsername);
+            return Result.success(null);
+        } catch (NotFoundException e) {
+            return Result.fail(e.getReasonCode());
+        } catch (com.teammatch.exception.ValidationException e) {
+            return Result.fail(e.getReasonCode());
+        } catch (Exception e) {
+            return Result.fail(com.teammatch.common.ReasonCode.UNKNOWN_ERROR);
+        }
+    }
+
+    /**
      * F. 添加技能标签（旧接口，保留兼容）
      * 路径: POST /api/profile/skills/add
      */

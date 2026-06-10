@@ -20,6 +20,7 @@ public class LeaderboardEntryVO {
     private Integer totalContributions;
     private String topLanguages;
     private String bio;
+    private String source;
     private Boolean claimed;
 
     // ==================== Getters & Setters ====================
@@ -66,6 +67,8 @@ public class LeaderboardEntryVO {
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
 
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public Boolean getClaimed() { return claimed; }
     public void setClaimed(Boolean claimed) { this.claimed = claimed; }
 }

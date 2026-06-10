@@ -13,22 +13,24 @@ import java.util.List;
 public interface TechProfileService {
 
     /**
-     * 根据 GitHub 用户名从 GitHub API 获取数据并生成技术画像
+     * 根据用户名从 API 获取数据并生成技术画像
      * 若已存在则更新，不存在则新建
      *
-     * @param githubUsername GitHub 用户名
+     * @param username 用户名（GitHub 或 Gitee）
+     * @param source 数据来源：github / gitee
      * @return 保存后的技术画像
      */
-    TechProfile generateOrUpdateProfile(String githubUsername);
+    TechProfile generateOrUpdateProfile(String username, String source);
 
     /**
      * 认领技术画像（将 claimed_by_user_id 设为当前用户）
      *
-     * @param githubUsername GitHub 用户名
+     * @param username 用户名（GitHub 或 Gitee）
+     * @param source 数据来源：github / gitee
      * @param userId 认领用户 ID
      * @return 认领后的技术画像
      */
-    TechProfile claimProfile(String githubUsername, Long userId);
+    TechProfile claimProfile(String username, String source, Long userId);
 
     /**
      * 根据用户 ID 获取该用户认领的技术画像
@@ -53,15 +55,18 @@ public interface TechProfileService {
     long getLeaderboardCount();
 
     /**
-     * 事务提交后触发异步同步 GitHub 数据
+     * 事务提交后触发异步同步数据
      * 由调用方在事务外调用，确保 @Async 能读到已提交的数据
+     *
+     * @param username 用户名（GitHub 或 Gitee）
+     * @param source 数据来源：github / gitee
      */
-    void triggerAsyncSync(String githubUsername);
+    void triggerAsyncSync(String username, String source);
 
     /**
-     * 根据 GitHub 用户名查找技术画像
+     * 根据用户名和数据来源查找技术画像
      */
-    com.teammatch.entity.TechProfile findByGithubUsername(String githubUsername);
+    com.teammatch.entity.TechProfile findByUsernameAndSource(String username, String source);
 
     /**
      * 更新技术画像

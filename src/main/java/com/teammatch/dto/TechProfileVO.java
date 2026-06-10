@@ -12,6 +12,7 @@ public class TechProfileVO {
 
     private Long id;
     private String githubUsername;
+    private String source;
     private Long claimedByUserId;
     private String claimedByUserNickname;
     private Integer totalStars;
@@ -34,6 +35,7 @@ public class TechProfileVO {
         TechProfileVO vo = new TechProfileVO();
         vo.setId(profile.getId());
         vo.setGithubUsername(profile.getGithubUsername());
+        vo.setSource(profile.getSource());
         vo.setClaimedByUserId(profile.getClaimedByUserId());
         vo.setTotalStars(profile.getTotalStars());
         vo.setTotalRepos(profile.getTotalRepos());
@@ -56,6 +58,9 @@ public class TechProfileVO {
 
     public String getGithubUsername() { return githubUsername; }
     public void setGithubUsername(String githubUsername) { this.githubUsername = githubUsername; }
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 
     public Long getClaimedByUserId() { return claimedByUserId; }
     public void setClaimedByUserId(Long claimedByUserId) { this.claimedByUserId = claimedByUserId; }

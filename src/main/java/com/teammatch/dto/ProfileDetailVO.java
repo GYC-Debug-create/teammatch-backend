@@ -25,6 +25,8 @@ public class ProfileDetailVO {
     private String bio;
     private String githubUsername;
     private Boolean githubClaimed;
+    private String giteeUsername;
+    private Boolean giteeClaimed;
     private Boolean formalProfileCompleted;
     private Integer creditScore;
     private String role;
@@ -55,6 +57,8 @@ public class ProfileDetailVO {
         vo.setBio(user.getBio());
         vo.setGithubUsername(user.getGithubUsername());
         vo.setGithubClaimed(user.getGithubClaimed());
+        vo.setGiteeUsername(user.getGiteeUsername());
+        vo.setGiteeClaimed(user.getGiteeClaimed());
         vo.setFormalProfileCompleted(user.getFormalProfileCompleted());
         vo.setCreditScore(user.getCreditScore());
         vo.setRole(user.getRole());
@@ -99,6 +103,12 @@ public class ProfileDetailVO {
 
     public Boolean getGithubClaimed() { return githubClaimed; }
     public void setGithubClaimed(Boolean githubClaimed) { this.githubClaimed = githubClaimed; }
+
+    public String getGiteeUsername() { return giteeUsername; }
+    public void setGiteeUsername(String giteeUsername) { this.giteeUsername = giteeUsername; }
+
+    public Boolean getGiteeClaimed() { return giteeClaimed; }
+    public void setGiteeClaimed(Boolean giteeClaimed) { this.giteeClaimed = giteeClaimed; }
 
     public Boolean getFormalProfileCompleted() { return formalProfileCompleted; }
     public void setFormalProfileCompleted(Boolean formalProfileCompleted) { this.formalProfileCompleted = formalProfileCompleted; }

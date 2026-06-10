@@ -540,6 +540,113 @@ Authorization: Bearer <Token>
 
 ---
 
+### 三、Gitee OAuth 模块 (`/profile/gitee`)
+
+#### 1. 跳转 Gitee OAuth 授权页
+**接口**: `GET /api/profile/gitee/auth`
+
+**说明**: 跳转到 Gitee OAuth 授权页面，用户在 Gitee 侧授权后回调到 `/api/profile/gitee/callback`。推荐使用此 OAuth 流程绑定 Gitee（可获取真实 commits/PRs 数据），手动绑定接口只能验证用户名。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**响应**: 302 重定向到 `https://gitee.com/oauth/authorize?...`
+
+---
+
+#### 2. OAuth 回调
+**接口**: `GET /api/profile/gitee/callback?code=xxx&state=userId`
+
+**说明**: Gitee 授权成功后回调此接口，后端用 code 换取 access_token，获取用户信息，创建/认领技术画像，异步同步数据。
+
+**请求参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| code | String | Gitee 返回的授权码 |
+| state | String | 用户 ID（由 auth 接口传入） |
+
+**响应**: 重定向到成功/失败页面
+
+---
+
+#### 3. 绑定成功页面
+**接口**: `GET /api/profile/gitee/success`
+
+**说明**: 返回绑定成功的 HTML 页面，通过 `window.opener.postMessage` 通知父窗口关闭。
+
+---
+
+#### 4. 手动绑定 Gitee（非 OAuth）
+**接口**: `POST /api/profile/gitee/bind`
+
+**说明**: 手动绑定 Gitee 用户名（通过公开 API 验证）。推荐使用 OAuth 流程，此接口仅作为备选。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求 Body**:
+```json
+{
+  "giteeUsername": "your-gitee-name"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": null
+}
+```
+
+**业务规则**:
+- 仅用于**首次绑定**，若已绑定过 Gitee 返回 `M3032` 错误
+- 绑定前检查 Gitee 用户名是否存在，不存在返回 `M3031` 错误
+- 手动绑定无法获取真实 commits/PRs 数据（需要 OAuth 授权）
+
+**错误码**:
+- `M3031` — Gitee 用户不存在
+- `M3032` — 已绑定 Gitee 账号，请使用更新接口
+
+---
+
+#### 5. 更新 Gitee 账号（换绑）
+**接口**: `PUT /api/profile/gitee/update`
+
+**说明**: 更新已绑定的 Gitee 用户名。仅当用户已经绑定过 Gitee 账号时可修改。
+
+**请求 Headers**:
+```
+Authorization: Bearer <Token>
+```
+
+**请求 Body**:
+```json
+{
+  "giteeUsername": "new-gitee-name"
+}
+```
+
+**响应**:
+```json
+{
+  "code": "00000",
+  "message": "成功",
+  "data": null
+}
+```
+
+**错误码**:
+- `M3033` — Gitee 账号未绑定，请先使用绑定接口
+- `M3031` — Gitee 用户不存在
+
+---
+
 ### 排行榜接口（板块二 冷启动）
 
 #### 1. 获取排行榜
@@ -572,6 +679,7 @@ Authorization: Bearer <Token>
       "totalCommits": 1523,
       "totalPrs": 38,
       "totalContributions": 450,
+      "source": "github",
       "topLanguages": "[\"Java\",\"Python\",\"TypeScript\"]",
       "bio": "Full-stack developer",
       "claimed": true
@@ -940,6 +1048,8 @@ Authorization: Bearer <管理员Token>
 | bio | VARCHAR | 个人简介 |
 | github_username | VARCHAR | GitHub 用户名 |
 | github_claimed | TINYINT | GitHub 是否已认领 |
+| gitee_username | VARCHAR | Gitee 用户名 |
+| gitee_claimed | TINYINT | Gitee 是否已认领 |
 | formal_profile_completed | TINYINT | 正式档案是否完成 |
 | credit_score | INT | 信誉分 |
 | role | VARCHAR | 用户角色（user/admin） |
@@ -1088,6 +1198,102 @@ Authorization: Bearer <管理员Token>
 | M3025 | 微信登录失败，请重试 | code 无效/过期、微信服务器异常等 |
 | M3026 | 技术画像不存在，请先绑定 GitHub 账号 | 用户未认领技术画像或未绑定 GitHub |
 | M3027 | 该 GitHub 账号已被其他用户认领 | 尝试认领已被他人认领的 GitHub 账号 |
+| M3031 | Gitee 用户不存在 | 绑定时 Gitee API 找不到该用户 |
+| M3032 | 已绑定 Gitee 账号，请使用更新接口 | 重复调用 Gitee 绑定接口 |
+| M3033 | Gitee 账号未绑定，请先使用绑定接口 | 尝试更新未绑定的 Gitee 账号 |
+
+---
+
+## Gitee OAuth 授权完整流程
+
+### 流程概览
+
+```
+┌─ 小程序端 ──────────────────────────────────────────┐
+│                                                       │
+│  个人档案页 → 点击「🔐 Gitee OAuth 授权（推荐）」     │
+│       │                                               │
+│       ▼                                               │
+│  GET /api/profile/gitee/auth-url                     │
+│       │                                               │
+│       ▼ 返回 { authUrl, state }                       │
+│  复制授权链接到剪贴板                                  │
+│       │                                               │
+│       ▼ 用户在手机浏览器中粘贴打开                     │
+│  ┌──────────────┐                                     │
+│  │  Gitee 登录   │  ← 浏览器中操作                    │
+│  │  Gitee 授权   │                                     │
+│  └──────┬───────┘                                     │
+│         │ Gitee 回调                                   │
+│         ▼                                              │
+│  GET /api/profile/gitee/callback?code=xxx&state=userId │
+│         │                                              │
+│         ▼ 后端处理                                      │
+│  ① 用 code 换 access_token                             │
+│  ② 用 token 拉取 Gitee 用户信息 + 仓库数据             │
+│  ③ 创建/认领 tech_profile（source=gitee）              │
+│  ④ 更新 user 表 gitee_username / gitee_claimed         │
+│  ⑤ 异步同步 stars/repos/languages/commits/PRs         │
+│         │                                              │
+│         ▼ 302 → /mp-success（✅ 授权成功页面）         │
+│                                                       │
+│  用户切回小程序 → 个人档案页                            │
+│  → 点击「🔄 检查授权状态」                              │
+│  → GET /api/profile/detail → giteeClaimed=true → 完成  │
+│                                                       │
+└───────────────────────────────────────────────────────┘
+```
+
+### 绑定方式对比
+
+| | 手动绑定 | OAuth 授权 |
+|---|---|---|
+| **接口** | `POST /profile/gitee/bind` | `GET /profile/gitee/auth-url` → 浏览器授权 → callback |
+| **验证方式** | Gitee 公开 API 查用户名 | Gitee OAuth 2.0 标准流程 |
+| **Stars/Repos/Languages** | ✅ 公开 API | ✅ 含私有仓库 |
+| **真实 commits** | ❌ 估算值 (stars×20+repos×5) | ✅ 通过 token 获取 |
+| **真实 PRs** | ❌ 估算值 (repos×2) | ✅ 通过 token 获取 |
+| **小程序适配** | ✅ 直接输入用户名 | ✅ 复制链接到浏览器（绕过 web-view 限制） |
+
+### 数据同步流程
+
+```
+OAuth 回调拿到 access_token
+  │
+  ├─ fetchGiteeUser(token)
+  │   └─ GET /api/v5/user?access_token=xxx
+  │       → avatar_url, bio, login
+  │
+  └─ fetchGiteeReposWithToken(token)
+      └─ GET /api/v5/user/repos?access_token=xxx&type=all
+          │
+          ├─ 遍历仓库（跳过 fork）
+          │   ├─ stargazers_count → totalStars
+          │   ├─ language → topLanguages
+          │   ├─ commits count → totalCommits
+          │   └─ PRs count → totalPrs
+          │
+          └─ computeTechScore()
+              = stars×10 + commits×2 + prs×5 + repos×3 + contributions×1
+```
+
+### 排行榜展示
+
+Gitee 和 GitHub 技术画像**混合排名**，按 `tech_score DESC` 统一排序：
+
+```json
+{
+  "rank": 8,
+  "nickname": "李四",
+  "githubUsername": "xiaocaozi666",
+  "source": "gitee",        // ← 区分来源
+  "techScore": 537,
+  "totalStars": 6,
+  "totalRepos": 7,
+  "topLanguages": "[Java, C++]",
+  "claimed": true
+}
+```
 
 ---
 

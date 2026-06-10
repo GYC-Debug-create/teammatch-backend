@@ -391,8 +391,8 @@ class ProfileServiceImplTest {
             org.springframework.transaction.support.TransactionCallback cb = invocation.getArgument(0);
             return cb.doInTransaction(null);
         });
-        when(techProfileService.findByGithubUsername(anyString())).thenReturn(null);
-        when(techProfileService.claimProfile(anyString(), anyLong())).thenReturn(new com.teammatch.entity.TechProfile());
+        when(techProfileService.findByUsernameAndSource(anyString(), eq("github"))).thenReturn(null);
+        when(techProfileService.claimProfile(anyString(), eq("github"), anyLong())).thenReturn(new com.teammatch.entity.TechProfile());
         when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"login\":\"new-username\"}");
 
         profileService.updateGithub(TEST_USER_ID, "new-username");
@@ -456,6 +456,109 @@ class ProfileServiceImplTest {
         profileService.updateGithub(TEST_USER_ID, "same-github");
         
         verify(userMapper, never()).updateById(any());
+    }
+
+    // ==================== Gitee 绑定 (bindGitee) ====================
+
+    @Test
+    @DisplayName("绑定 Gitee - 应成功设置用户名并标记为已绑定")
+    void bindGitee_shouldSuccess() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"login\":\"gitee-user\"}");
+
+        profileService.bindGitee(TEST_USER_ID, "gitee-user");
+
+        assertThat(user.getGiteeUsername()).isEqualTo("gitee-user");
+        assertThat(user.getGiteeClaimed()).isTrue();
+        verify(userMapper).updateById(user);
+    }
+
+    @Test
+    @DisplayName("绑定 Gitee - 已绑定相同账号应静默返回")
+    void bindGitee_sameAccount_shouldDoNothing() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGiteeClaimed(true);
+        user.setGiteeUsername("same-gitee");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        profileService.bindGitee(TEST_USER_ID, "same-gitee");
+        
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("绑定 Gitee - 已绑定不同账号应抛异常")
+    void bindGitee_alreadyBound_shouldThrow() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGiteeClaimed(true);
+        user.setGiteeUsername("existing-gitee");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        assertThatThrownBy(() -> profileService.bindGitee(TEST_USER_ID, "new-gitee"))
+                .isInstanceOf(com.teammatch.exception.ValidationException.class);
+    }
+
+    // ==================== Gitee 用户名更新 (updateGitee) ====================
+
+    @Test
+    @DisplayName("更新 Gitee - 未绑定应抛异常")
+    void updateGitee_notBound_shouldThrow() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGiteeClaimed(false);
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        assertThatThrownBy(() -> profileService.updateGitee(TEST_USER_ID, "any-gitee"))
+                .isInstanceOf(com.teammatch.exception.ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("更新 Gitee - 相同账号应静默返回")
+    void updateGitee_sameAccount_shouldDoNothing() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGiteeClaimed(true);
+        user.setGiteeUsername("same-gitee");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+
+        profileService.updateGitee(TEST_USER_ID, "same-gitee");
+        
+        verify(userMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("更新 Gitee - 已绑定用户正常更新")
+    void updateGitee_claimed_shouldSuccess() {
+        User user = new User();
+        user.setId(TEST_USER_ID);
+        user.setGiteeClaimed(true);
+        user.setGiteeUsername("old-gitee");
+        
+        when(userMapper.selectById(TEST_USER_ID)).thenReturn(user);
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.transaction.support.TransactionCallback cb = invocation.getArgument(0);
+            return cb.doInTransaction(null);
+        });
+        when(techProfileService.findByUsernameAndSource(anyString(), eq("gitee"))).thenReturn(null);
+        when(techProfileService.claimProfile(anyString(), eq("gitee"), anyLong())).thenReturn(new com.teammatch.entity.TechProfile());
+        when(restTemplate.getForObject(anyString(), eq(String.class))).thenReturn("{\"login\":\"new-gitee\"}");
+
+        profileService.updateGitee(TEST_USER_ID, "new-gitee");
+        
+        verify(userMapper).updateById(user);
+        assertThat(user.getGiteeUsername()).isEqualTo("new-gitee");
     }
 
     // ==================== 获取用户档案 (getProfileById) ====================

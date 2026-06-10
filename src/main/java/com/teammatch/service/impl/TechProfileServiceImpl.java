@@ -40,16 +40,20 @@ public class TechProfileServiceImpl implements TechProfileService {
     private GitHubSyncService gitHubSyncService;
 
     @Autowired
+    private GiteeSyncService giteeSyncService;
+
+    @Autowired
     private RestTemplate restTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
 
     @Override
-    public TechProfile generateOrUpdateProfile(String githubUsername) {
-        // 1. 查询是否已存在
+    public TechProfile generateOrUpdateProfile(String username, String source) {
+        // 1. 查询是否已存在（按 username + source 联合查询）
         LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        wrapper.eq(TechProfile::getGithubUsername, username)
+               .eq(TechProfile::getSource, source != null ? source : "github");
         TechProfile existing = techProfileMapper.selectOne(wrapper);
 
         if (existing != null) {
@@ -58,7 +62,8 @@ public class TechProfileServiceImpl implements TechProfileService {
 
         // 2. 新记录：先创建占位数据，避免并发重复创建
         TechProfile profile = new TechProfile();
-        profile.setGithubUsername(githubUsername);
+        profile.setGithubUsername(username);
+        profile.setSource(source != null ? source : "github");
         profile.setSyncStatus("pending");
         profile.setTotalStars(0);
         profile.setTotalRepos(0);
@@ -71,15 +76,16 @@ public class TechProfileServiceImpl implements TechProfileService {
 
         try {
             techProfileMapper.insert(profile);
-            log.info("创建技术画像占位: githubUsername={}, id={}", githubUsername, profile.getId());
+            log.info("创建技术画像占位: username={}, source={}, id={}", username, source, profile.getId());
 
             // 同步在 triggerAsyncSync 中触发（由调用方在事务外调用）
         } catch (DuplicateKeyException e) {
             // 并发下另一个线程已创建，查询已存在的记录
             LambdaQueryWrapper<TechProfile> retryWrapper = new LambdaQueryWrapper<>();
-            retryWrapper.eq(TechProfile::getGithubUsername, githubUsername);
+            retryWrapper.eq(TechProfile::getGithubUsername, username)
+                        .eq(TechProfile::getSource, source != null ? source : "github");
             profile = techProfileMapper.selectOne(retryWrapper);
-            log.info("技术画像已存在（并发场景）: githubUsername={}", githubUsername);
+            log.info("技术画像已存在（并发场景）: username={}, source={}", username, source);
         }
 
         return profile;
@@ -89,20 +95,21 @@ public class TechProfileServiceImpl implements TechProfileService {
 
     @Override
     @Transactional
-    public TechProfile claimProfile(String githubUsername, Long userId) {
+    public TechProfile claimProfile(String username, String source, Long userId) {
         // 1. 查找或生成技术画像
         LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        wrapper.eq(TechProfile::getGithubUsername, username)
+               .eq(TechProfile::getSource, source != null ? source : "github");
         TechProfile profile = techProfileMapper.selectOne(wrapper);
 
         if (profile == null) {
-            // 没有则从 GitHub 生成
-            profile = generateOrUpdateProfile(githubUsername);
+            // 没有则生成
+            profile = generateOrUpdateProfile(username, source);
         }
 
         // 2. 检查是否已被其他人认领
         if (profile.isClaimed() && !profile.getClaimedByUserId().equals(userId)) {
-            throw new RuntimeException("该 GitHub 账号已被其他用户认领");
+            throw new RuntimeException("该" + source + " 账号已被其他用户认领");
         }
 
         // 3. 认领
@@ -161,6 +168,7 @@ public class TechProfileServiceImpl implements TechProfileService {
             entry.setTotalContributions(profile.getTotalContributions());
             entry.setTopLanguages(profile.getTopLanguages());
             entry.setBio(profile.getBio());
+            entry.setSource(profile.getSource() != null ? profile.getSource() : "github");
             entry.setClaimed(profile.isClaimed());
 
             // 如果已认领，附加用户信息
@@ -191,9 +199,10 @@ public class TechProfileServiceImpl implements TechProfileService {
      * 此方法无 @Transactional，保证 @Async 在事务外执行
      */
     @Override
-    public com.teammatch.entity.TechProfile findByGithubUsername(String githubUsername) {
+    public com.teammatch.entity.TechProfile findByUsernameAndSource(String username, String source) {
         LambdaQueryWrapper<com.teammatch.entity.TechProfile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(com.teammatch.entity.TechProfile::getGithubUsername, githubUsername);
+        wrapper.eq(com.teammatch.entity.TechProfile::getGithubUsername, username)
+               .eq(com.teammatch.entity.TechProfile::getSource, source != null ? source : "github");
         return techProfileMapper.selectOne(wrapper);
     }
 
@@ -208,15 +217,21 @@ public class TechProfileServiceImpl implements TechProfileService {
     }
 
     @Override
-    public void triggerAsyncSync(String githubUsername) {
+    public void triggerAsyncSync(String username, String source) {
         LambdaQueryWrapper<TechProfile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TechProfile::getGithubUsername, githubUsername);
+        wrapper.eq(TechProfile::getGithubUsername, username)
+               .eq(TechProfile::getSource, source != null ? source : "github");
         TechProfile profile = techProfileMapper.selectOne(wrapper);
         if (profile != null) {
             profile.setSyncStatus("pending");
             techProfileMapper.updateById(profile);
-            log.info("触发技术画像异步同步: githubUsername={}", githubUsername);
-            gitHubSyncService.syncGitHubDataAsync(profile.getId(), githubUsername);
+            log.info("触发技术画像异步同步: username={}, source={}", username, source);
+            if ("gitee".equals(source)) {
+                // 使用公开 API 同步 Gitee 数据（无需 access token）
+                giteeSyncService.syncGiteeDataWithoutToken(profile.getId(), username);
+            } else {
+                gitHubSyncService.syncGitHubDataAsync(profile.getId(), username);
+            }
         }
     }
 }

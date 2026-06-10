@@ -53,6 +53,12 @@ public class User {
     /** GitHub 是否已认领：0 未认领，1 已认领 */
     private Boolean githubClaimed;
 
+    /** Gitee 用户名 */
+    private String giteeUsername;
+
+    /** Gitee 是否已认领 */
+    private Boolean giteeClaimed;
+
     /** 正式档案是否完成：0 未完成，1 已完成 */
     private Boolean formalProfileCompleted;
 
@@ -104,6 +110,10 @@ public class User {
     public void setGithubUsername(String githubUsername) { this.githubUsername = githubUsername; }
     public Boolean getGithubClaimed() { return githubClaimed; }
     public void setGithubClaimed(Boolean githubClaimed) { this.githubClaimed = githubClaimed; }
+    public String getGiteeUsername() { return giteeUsername; }
+    public void setGiteeUsername(String giteeUsername) { this.giteeUsername = giteeUsername; }
+    public Boolean getGiteeClaimed() { return giteeClaimed; }
+    public void setGiteeClaimed(Boolean giteeClaimed) { this.giteeClaimed = giteeClaimed; }
     public Boolean getFormalProfileCompleted() { return formalProfileCompleted; }
     public void setFormalProfileCompleted(Boolean formalProfileCompleted) { this.formalProfileCompleted = formalProfileCompleted; }
     public Integer getCreditScore() { return creditScore; }

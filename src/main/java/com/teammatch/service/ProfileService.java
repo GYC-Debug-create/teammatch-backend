@@ -30,6 +30,16 @@ public interface ProfileService {
     void updateGithub(Long userId, String githubUsername);
 
     /**
+     * 绑定 Gitee 用户名（手动绑定，非 OAuth 流程）
+     */
+    void bindGitee(Long userId, String giteeUsername);
+
+    /**
+     * 更新 Gitee 用户名（仅当已经绑定过时可修改）
+     */
+    void updateGitee(Long userId, String giteeUsername);
+
+    /**
      * 为用户添加技能标签
      */
     void addSkill(Long userId, Long skillTagId);

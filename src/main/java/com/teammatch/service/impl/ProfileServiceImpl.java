@@ -92,6 +92,13 @@ public class ProfileServiceImpl implements ProfileService {
             throw new com.teammatch.exception.NotFoundException(ReasonCode.GITHUB_USER_NOT_FOUND);
         }
 
+        // 2.5 检查该 GitHub 账号是否已被其他用户认领
+        com.teammatch.entity.TechProfile existingGhProfile = techProfileService.findByUsernameAndSource(githubUsername, "github");
+        if (existingGhProfile != null && existingGhProfile.isClaimed()
+                && !existingGhProfile.getClaimedByUserId().equals(userId)) {
+            throw new com.teammatch.exception.ValidationException(ReasonCode.TECH_PROFILE_ALREADY_CLAIMED);
+        }
+
         // 3. 事务内执行数据库操作
         transactionTemplate.execute(status -> {
             User user = userMapper.selectById(userId);
@@ -102,7 +109,7 @@ public class ProfileServiceImpl implements ProfileService {
             userMapper.updateById(user);
 
             try {
-                techProfileService.claimProfile(githubUsername, userId);
+                techProfileService.claimProfile(githubUsername, "github", userId);
                 log.info("技术画像认领成功: userId={}, githubUsername={}", userId, githubUsername);
             } catch (Exception e) {
                 log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
@@ -111,7 +118,7 @@ public class ProfileServiceImpl implements ProfileService {
         });
 
         // 4. 触发异步同步
-        triggerAsyncSyncQuietly(githubUsername);
+        triggerAsyncSyncQuietly(githubUsername, "github");
     }
 
     @Override
@@ -136,7 +143,7 @@ public class ProfileServiceImpl implements ProfileService {
         }
 
         // 检查新 GitHub 账号是否已被其他用户认领（事务外提前拦截，避免部分更新）
-        com.teammatch.entity.TechProfile existingProfile = techProfileService.findByGithubUsername(githubUsername);
+        com.teammatch.entity.TechProfile existingProfile = techProfileService.findByUsernameAndSource(githubUsername, "github");
         if (existingProfile != null && existingProfile.isClaimed()
                 && !existingProfile.getClaimedByUserId().equals(userId)) {
             throw new com.teammatch.exception.ValidationException(ReasonCode.TECH_PROFILE_ALREADY_CLAIMED);
@@ -147,7 +154,7 @@ public class ProfileServiceImpl implements ProfileService {
         // 事务内操作：释放旧技术画像 → 更新用户 → 认领新技术画像
         transactionTemplate.execute(status -> {
             // 删除旧技术画像（老数据已无用，保留最新即可）
-            com.teammatch.entity.TechProfile oldProfile = techProfileService.findByGithubUsername(oldGithub);
+            com.teammatch.entity.TechProfile oldProfile = techProfileService.findByUsernameAndSource(oldGithub, "github");
             if (oldProfile != null) {
                 techProfileService.deleteTechProfile(oldProfile);
             }
@@ -158,7 +165,7 @@ public class ProfileServiceImpl implements ProfileService {
 
             // 认领新技术画像
             try {
-                techProfileService.claimProfile(githubUsername, userId);
+                techProfileService.claimProfile(githubUsername, "github", userId);
                 log.info("技术画像换绑成功: userId={}, from={}, to={}", userId, oldGithub, githubUsername);
             } catch (Exception e) {
                 log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
@@ -167,7 +174,7 @@ public class ProfileServiceImpl implements ProfileService {
         });
 
         // 触发异步同步
-        triggerAsyncSyncQuietly(githubUsername);
+        triggerAsyncSyncQuietly(githubUsername, "github");
     }
 
     /**
@@ -189,13 +196,127 @@ public class ProfileServiceImpl implements ProfileService {
         }
     }
 
+    @Override
+    public void bindGitee(Long userId, String giteeUsername) {
+        // 1. 检查用户是否已绑定 Gitee
+        User currentUser = userMapper.selectById(userId);
+        if (currentUser == null) return;
+
+        if (Boolean.TRUE.equals(currentUser.getGiteeClaimed())) {
+            if (giteeUsername.equals(currentUser.getGiteeUsername())) {
+                log.info("Gitee 账号未变更，无需重新绑定: userId={}, giteeUsername={}", userId, giteeUsername);
+                return;
+            }
+            throw new com.teammatch.exception.ValidationException(com.teammatch.common.ReasonCode.GITEE_ALREADY_BOUND);
+        }
+
+        // 2. 检查 Gitee 用户是否存在
+        if (!checkGiteeUserExists(giteeUsername)) {
+            throw new com.teammatch.exception.NotFoundException(com.teammatch.common.ReasonCode.GITEE_USER_NOT_FOUND);
+        }
+
+        // 2.5 检查该 Gitee 账号是否已被其他用户认领
+        com.teammatch.entity.TechProfile existingProfile = techProfileService.findByUsernameAndSource(giteeUsername, "gitee");
+        if (existingProfile != null && existingProfile.isClaimed()
+                && !existingProfile.getClaimedByUserId().equals(userId)) {
+            throw new com.teammatch.exception.ValidationException(com.teammatch.common.ReasonCode.TECH_PROFILE_ALREADY_CLAIMED);
+        }
+
+        // 3. 事务内执行数据库操作
+        transactionTemplate.execute(status -> {
+            User user = userMapper.selectById(userId);
+            if (user == null) return null;
+
+            user.setGiteeUsername(giteeUsername);
+            user.setGiteeClaimed(true);
+            userMapper.updateById(user);
+
+            try {
+                techProfileService.claimProfile(giteeUsername, "gitee", userId);
+                log.info("Gitee 技术画像认领成功: userId={}, giteeUsername={}", userId, giteeUsername);
+            } catch (Exception e) {
+                log.error("Gitee 技术画像认领失败: userId={}, giteeUsername={}, error={}", userId, giteeUsername, e.getMessage());
+            }
+            return null;
+        });
+
+        // 4. 触发异步同步
+        triggerAsyncSyncQuietly(giteeUsername, "gitee");
+    }
+
+    @Override
+    public void updateGitee(Long userId, String giteeUsername) {
+        User user = userMapper.selectById(userId);
+        if (user == null) return;
+
+        // 检查是否已绑定 Gitee
+        if (!Boolean.TRUE.equals(user.getGiteeClaimed())) {
+            throw new com.teammatch.exception.ValidationException(com.teammatch.common.ReasonCode.GITEE_NOT_BOUND);
+        }
+
+        // 同一账号换绑到同一个 → 无操作
+        if (giteeUsername.equals(user.getGiteeUsername())) {
+            log.info("Gitee 账号未变更: userId={}, giteeUsername={}", userId, giteeUsername);
+            return;
+        }
+
+        // 检查新 Gitee 用户是否存在
+        if (!checkGiteeUserExists(giteeUsername)) {
+            throw new com.teammatch.exception.NotFoundException(com.teammatch.common.ReasonCode.GITEE_USER_NOT_FOUND);
+        }
+
+        // 检查新 Gitee 账号是否已被其他用户认领
+        com.teammatch.entity.TechProfile existingProfile = techProfileService.findByUsernameAndSource(giteeUsername, "gitee");
+        if (existingProfile != null && existingProfile.isClaimed()
+                && !existingProfile.getClaimedByUserId().equals(userId)) {
+            throw new com.teammatch.exception.ValidationException(com.teammatch.common.ReasonCode.TECH_PROFILE_ALREADY_CLAIMED);
+        }
+
+        String oldGitee = user.getGiteeUsername();
+
+        // 事务内操作
+        transactionTemplate.execute(status -> {
+            com.teammatch.entity.TechProfile oldProfile = techProfileService.findByUsernameAndSource(oldGitee, "gitee");
+            if (oldProfile != null) {
+                techProfileService.deleteTechProfile(oldProfile);
+            }
+
+            user.setGiteeUsername(giteeUsername);
+            userMapper.updateById(user);
+
+            try {
+                techProfileService.claimProfile(giteeUsername, "gitee", userId);
+                log.info("Gitee 技术画像换绑成功: userId={}, from={}, to={}", userId, oldGitee, giteeUsername);
+            } catch (Exception e) {
+                log.error("Gitee 技术画像认领失败: userId={}, giteeUsername={}, error={}", userId, giteeUsername, e.getMessage());
+            }
+            return null;
+        });
+
+        triggerAsyncSyncQuietly(giteeUsername, "gitee");
+    }
+
+    /**
+     * 检查 Gitee 用户名是否存在
+     */
+    private boolean checkGiteeUserExists(String username) {
+        try {
+            String url = String.format("https://gitee.com/api/v5/users/%s", username);
+            String response = restTemplate.getForObject(url, String.class);
+            return response != null && !response.contains("Not Found") && !response.contains("\"message\"");
+        } catch (Exception e) {
+            log.warn("Gitee 用户校验失败: username={}, error={}", username, e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * 静默触发异步同步
      */
-    private void triggerAsyncSyncQuietly(String githubUsername) {
+    private void triggerAsyncSyncQuietly(String username, String source) {
         try {
-            techProfileService.triggerAsyncSync(githubUsername);
-            log.info("技术画像异步同步已触发: githubUsername={}", githubUsername);
+            techProfileService.triggerAsyncSync(username, source);
+            log.info("技术画像异步同步已触发: username={}, source={}", username, source);
         } catch (Exception e) {
             log.error("技术画像异步同步触发失败: {}", e.getMessage());
         }

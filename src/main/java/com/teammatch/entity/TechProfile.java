@@ -23,6 +23,9 @@ public class TechProfile {
     /** GitHub 用户名 */
     private String githubUsername;
 
+    /** 数据来源：github / gitee */
+    private String source;
+
     /** 认领该画像的用户 ID（NULL 表示未认领） */
     private Long claimedByUserId;
 

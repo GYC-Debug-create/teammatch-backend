@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `bio` VARCHAR(500) NULL COMMENT 'Profile bio',
   `github_username` VARCHAR(64) NULL COMMENT 'GitHub username for P0 cold-start claim',
   `github_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'GitHub profile claimed flag: 0/1',
+  `gitee_username` VARCHAR(64) NULL COMMENT 'Gitee username for cold-start claim',
+  `gitee_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Gitee profile claimed flag: 0/1',
   `formal_profile_completed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Formal profile completed flag: 0/1',
   `credit_score` INT NOT NULL DEFAULT 100 COMMENT 'Cached credit score, derived from effective credit_change rows',
   `role` VARCHAR(32) NOT NULL DEFAULT 'user' COMMENT 'Role: user/admin',
@@ -82,12 +84,13 @@ CREATE TABLE IF NOT EXISTS `tech_profile` (
   `tech_score` INT NOT NULL DEFAULT 0 COMMENT 'Computed tech score: stars*10+commits*2+prs*5+repos*3+contributions',
   `bio` VARCHAR(500) NULL COMMENT 'GitHub profile bio',
   `avatar_url` VARCHAR(512) NULL COMMENT 'GitHub avatar URL',
+  `source` VARCHAR(32) NOT NULL DEFAULT 'github' COMMENT 'Data source: github/gitee',
   `sync_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Sync status: pending/synced/failed',
   `last_synced_at` DATETIME NULL COMMENT 'Last time profile was synced from GitHub',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tech_profile_github_username` (`github_username`),
+  UNIQUE KEY `uk_tech_profile_username_source` (`github_username`, `source`),
   KEY `idx_tech_profile_claimed_user` (`claimed_by_user_id`),
   KEY `idx_tech_profile_tech_score` (`tech_score`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 tech profile from GitHub analysis for cold-start leaderboard';
@@ -395,25 +398,33 @@ INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, 
 ('admin_openid_001', '系统管理员', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@teammatch.edu.cn', 1, 'TeamMatch大学', 'admin', 'active', 100, 1);
 
 -- 3.2 插入普通用户
-INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `major`, `grade`, `bio`, `github_username`, `github_claimed`, `credit_score`, `formal_profile_completed`, `status`) VALUES
-('mock_wx_code_user_a', '张三', 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@example.edu.cn', 1, '清华大学', '计算机科学与技术', '2023级', '热爱编程，寻找队友一起做项目', 'zhangsan-github', 1, 100, 1, 'active'),
-('mock_wx_code_user_b', '李四', 'lisi', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@example.edu.cn', 1, '北京大学', '软件工程', '2022级', '前端开发爱好者', 'lisi-github', 1, 95, 1, 'active'),
-('mock_wx_code_user_c', '王五', 'wangwu', NULL, 'wangwu@example.edu.cn', 1, '复旦大学', '人工智能', '2023级', 'AI方向研究生', 'wangwu-github', 1, 100, 1, 'active'),
-('mock_wx_code_user_d', '赵六', 'zhaoliu', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, 100, 0, 'active'),
-('mock_wx_code_user_e', '孙七', 'sunqi', NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL, 0, 80, 0, 'banned');
+INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `major`, `grade`, `bio`, `github_username`, `github_claimed`, `gitee_username`, `gitee_claimed`, `credit_score`, `formal_profile_completed`, `status`) VALUES
+('mock_wx_code_user_a', '张三', 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@example.edu.cn', 1, '清华大学', '计算机科学与技术', '2023级', '热爱编程，寻找队友一起做项目', 'zhangsan-github', 1, NULL, 0, 100, 1, 'active'),
+('mock_wx_code_user_b', '李四', 'lisi', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@example.edu.cn', 1, '北京大学', '软件工程', '2022级', '前端开发爱好者', 'lisi-github', 1, NULL, 0, 95, 1, 'active'),
+('mock_wx_code_user_c', '王五', 'wangwu', NULL, 'wangwu@example.edu.cn', 1, '复旦大学', '人工智能', '2023级', 'AI方向研究生', 'wangwu-github', 1, NULL, 0, 100, 1, 'active'),
+('mock_wx_code_user_d', '赵六', 'zhaoliu', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 100, 0, 'active'),
+('mock_wx_code_user_e', '孙七', 'sunqi', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 80, 0, 'banned');
 
 -- 3.2a 插入技术画像数据（供排行榜使用）
-INSERT INTO `tech_profile` (`github_username`, `claimed_by_user_id`, `total_stars`, `total_repos`, `total_commits`, `total_prs`, `total_contributions`, `top_languages`, `tech_score`, `bio`, `avatar_url`, `sync_status`, `last_synced_at`) VALUES
-('zhangsan-github', 2, 245, 12, 1523, 38, 450, '["Java","Python","TypeScript"]', (245*10+1523*2+38*5+12*3+450*1), 'Full-stack developer passionate about open source', 'https://avatars.githubusercontent.com/u/zhangsan', 'synced', NOW()),
-('lisi-github', 3, 780, 28, 3200, 85, 920, '["JavaScript","Vue.js","CSS","TypeScript"]', (780*10+3200*2+85*5+28*3+920*1), 'Frontend enthusiast & UI/UX lover', 'https://avatars.githubusercontent.com/u/lisi', 'synced', NOW()),
-('wangwu-github', 4, 120, 8, 890, 15, 310, '["Python","C++","CUDA"]', (120*10+890*2+15*5+8*3+310*1), 'AI researcher, open-source contributor', 'https://avatars.githubusercontent.com/u/wangwu', 'synced', NOW()),
-('torvalds', NULL, 999999, 6, 50000, 200, 9999, '["C","Assembly","Shell"]', (999999*10+50000*2+200*5+6*3+9999*1), 'Creator of Linux and Git', 'https://avatars.githubusercontent.com/u/1024025', 'synced', NOW()),
-('ruanyf', NULL, 15000, 45, 8000, 120, 3500, '["JavaScript","Markdown","CSS"]', (15000*10+8000*2+120*5+45*3+3500*1), 'Blogger, author, open-source evangelist', 'https://avatars.githubusercontent.com/u/905434', 'synced', NOW());
+INSERT INTO `tech_profile` (`github_username`, `source`, `claimed_by_user_id`, `total_stars`, `total_repos`, `total_commits`, `total_prs`, `total_contributions`, `top_languages`, `tech_score`, `bio`, `avatar_url`, `sync_status`, `last_synced_at`) VALUES
+('zhangsan-github', 'github', 2, 245, 12, 1523, 38, 450, '["Java","Python","TypeScript"]', (245*10+1523*2+38*5+12*3+450*1), 'Full-stack developer passionate about open source', 'https://avatars.githubusercontent.com/u/zhangsan', 'synced', NOW()),
+('lisi-github', 'github', 3, 780, 28, 3200, 85, 920, '["JavaScript","Vue.js","CSS","TypeScript"]', (780*10+3200*2+85*5+28*3+920*1), 'Frontend enthusiast & UI/UX lover', 'https://avatars.githubusercontent.com/u/lisi', 'synced', NOW()),
+('wangwu-github', 'github', 4, 120, 8, 890, 15, 310, '["Python","C++","CUDA"]', (120*10+890*2+15*5+8*3+310*1), 'AI researcher, open-source contributor', 'https://avatars.githubusercontent.com/u/wangwu', 'synced', NOW()),
+('torvalds', 'github', NULL, 999999, 6, 50000, 200, 9999, '["C","Assembly","Shell"]', (999999*10+50000*2+200*5+6*3+9999*1), 'Creator of Linux and Git', 'https://avatars.githubusercontent.com/u/1024025', 'synced', NOW()),
+('ruanyf', 'github', NULL, 15000, 45, 8000, 120, 3500, '["JavaScript","Markdown","CSS"]', (15000*10+8000*2+120*5+45*3+3500*1), 'Blogger, author, open-source evangelist', 'https://avatars.githubusercontent.com/u/905434', 'synced', NOW());
+
+-- Gitee 技术画像（与 GitHub 使用相同评分规则）
+INSERT INTO `tech_profile` (`github_username`, `source`, `claimed_by_user_id`, `total_stars`, `total_repos`, `total_commits`, `total_prs`, `total_contributions`, `top_languages`, `tech_score`, `bio`, `avatar_url`, `sync_status`, `last_synced_at`) VALUES
+('gitee-zhangsan', 'gitee', 2, 156, 8, 920, 22, 280, '["Java","Spring Boot","MySQL"]', (156*10+920*2+22*5+8*3+280*1), 'Java后端开发者，热爱开源', 'https://avatars.githubusercontent.com/u/gitee-zhangsan', 'synced', NOW()),
+('gitee-opensource', 'gitee', NULL, 560, 15, 2100, 48, 620, '["Python","Go","Rust"]', (560*10+2100*2+48*5+15*3+620*1), 'Gitee 开源贡献者', 'https://avatars.githubusercontent.com/u/gitee-opensource', 'synced', NOW()),
+('gitee-fe-dev', 'gitee', NULL, 320, 10, 1450, 30, 480, '["JavaScript","Vue.js","TypeScript"]', (320*10+1450*2+30*5+10*3+480*1), '前端开发工程师', 'https://avatars.githubusercontent.com/u/gitee-fe-dev', 'synced', NOW());
 
 -- 3.2b 更新用户关联技术画像
 UPDATE `user` SET `tech_profile_id` = 1 WHERE `id` = 2;
 UPDATE `user` SET `tech_profile_id` = 2 WHERE `id` = 3;
 UPDATE `user` SET `tech_profile_id` = 3 WHERE `id` = 4;
+-- 张三同时绑定 Gitee（tech_profile_id 指向 GitHub，gitee_username 记录 Gitee 账号）
+UPDATE `user` SET `gitee_username` = 'gitee-zhangsan', `gitee_claimed` = 1 WHERE `id` = 2;
 
 -- 3.3 插入技能标签
 INSERT INTO `skill_tag` (`name`, `category`, `status`) VALUES

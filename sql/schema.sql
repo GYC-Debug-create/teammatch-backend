@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `bio` VARCHAR(500) NULL COMMENT 'Profile bio',
   `github_username` VARCHAR(64) NULL COMMENT 'GitHub username for P0 cold-start claim',
   `github_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'GitHub profile claimed flag: 0/1',
+  `gitee_username` VARCHAR(64) NULL COMMENT 'Gitee username for cold-start claim',
+  `gitee_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Gitee profile claimed flag: 0/1',
   `formal_profile_completed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Formal profile completed flag: 0/1',
   `credit_score` INT NOT NULL DEFAULT 100 COMMENT 'Cached credit score, derived from effective credit_change rows',
   `role` VARCHAR(32) NOT NULL DEFAULT 'user' COMMENT 'Role: user/admin',
@@ -58,12 +60,13 @@ CREATE TABLE IF NOT EXISTS `tech_profile` (
   `tech_score` INT NOT NULL DEFAULT 0 COMMENT 'Computed tech score: stars*10+commits*2+prs*5+repos*3+contributions',
   `bio` VARCHAR(500) NULL COMMENT 'GitHub profile bio',
   `avatar_url` VARCHAR(512) NULL COMMENT 'GitHub avatar URL',
+  `source` VARCHAR(32) NOT NULL DEFAULT 'github' COMMENT 'Data source: github/gitee',
   `sync_status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Sync status: pending/synced/failed',
   `last_synced_at` DATETIME NULL COMMENT 'Last time profile was synced from GitHub',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tech_profile_github_username` (`github_username`),
+  UNIQUE KEY `uk_tech_profile_username_source` (`github_username`, `source`),
   KEY `idx_tech_profile_claimed_user` (`claimed_by_user_id`),
   KEY `idx_tech_profile_tech_score` (`tech_score`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='M3 tech profile from GitHub analysis for cold-start leaderboard';

@@ -44,6 +44,12 @@ class TechProfileServiceTest {
     @Mock
     private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
+    @Mock
+    private com.teammatch.service.impl.GiteeSyncService giteeSyncService;
+
+    @Mock
+    private com.teammatch.service.impl.GitHubSyncService gitHubSyncService;
+
     @InjectMocks
     private TechProfileServiceImpl techProfileService;
 
@@ -195,7 +201,7 @@ class TechProfileServiceTest {
         when(techProfileMapper.updateById(any(TechProfile.class))).thenReturn(1);
         when(userMapper.updateById(any(User.class))).thenReturn(1);
 
-        TechProfile result = techProfileService.claimProfile("newuser", 3L);
+        TechProfile result = techProfileService.claimProfile("newuser", "github", 3L);
 
         assertThat(result.getClaimedByUserId()).isEqualTo(3L);
         verify(techProfileMapper).updateById(any(TechProfile.class));
