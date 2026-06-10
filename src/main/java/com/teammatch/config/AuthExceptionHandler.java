@@ -5,6 +5,8 @@ import com.teammatch.common.Result;
 import com.teammatch.exception.AuthenticationException;
 import com.teammatch.exception.AuthorizationException;
 import com.teammatch.exception.DuplicateDataException;
+import com.teammatch.exception.NotFoundException;
+import com.teammatch.exception.ValidationException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureException;
@@ -71,6 +73,18 @@ public class AuthExceptionHandler {
     @ExceptionHandler(DuplicateDataException.class)
     public Result<Void> handleDuplicateDataException(DuplicateDataException e) {
         log.warn("数据重复: {}", e.getReasonCode());
+        return Result.fail(e.getReasonCode());
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public Result<Void> handleNotFoundException(NotFoundException e) {
+        log.warn("资源不存在: {}", e.getReasonCode());
+        return Result.fail(e.getReasonCode());
+    }
+
+    @ExceptionHandler(ValidationException.class)
+    public Result<Void> handleValidationException(ValidationException e) {
+        log.warn("参数校验失败: {}", e.getReasonCode());
         return Result.fail(e.getReasonCode());
     }
 }

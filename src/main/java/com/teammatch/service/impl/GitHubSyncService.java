@@ -38,6 +38,20 @@ public class GitHubSyncService {
     private static final String GITHUB_API_REPOS = "https://api.github.com/users/%s/repos?per_page=100&sort=pushed";
 
     /**
+     * 检查 GitHub 用户名是否存在
+     */
+    public boolean checkUserExists(String username) {
+        try {
+            String url = String.format(GITHUB_API_USER, username);
+            String responseBody = restTemplate.getForObject(url, String.class);
+            return responseBody != null && !responseBody.contains("Not Found");
+        } catch (Exception e) {
+            log.warn("GitHub 用户检查失败: username={}, error={}", username, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 异步同步 GitHub 数据
      */
     @Async

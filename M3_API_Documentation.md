@@ -408,7 +408,7 @@ Authorization: Bearer <Token>
 #### 2. 绑定 GitHub 账号
 **接口**: `POST /api/profile/github/bind`
 
-**说明**: 绑定用户的 GitHub 用户名。
+**说明**: 首次绑定用户的 GitHub 用户名。已绑定请使用 `PUT /api/profile/github/update` 换绑。
 
 **请求 Headers**:
 ```
@@ -431,9 +431,18 @@ Authorization: Bearer <Token>
 }
 ```
 
+**业务规则**:
+- 仅用于**首次绑定**，若已绑定过 GitHub 返回 `M3030` 错误
+- 绑定前检查 GitHub 用户名是否存在，不存在返回 `M3029` 错误
+- 绑定后自动创建/认领技术画像，异步拉取 GitHub 数据
+
+**错误码**:
+- `M3029` — GitHub 用户不存在
+- `M3030` — 已绑定 GitHub 账号，请使用更新接口
+
 ---
 
-#### 3. 更新 GitHub 账号
+#### 3. 更新 GitHub 账号（换绑）
 **接口**: `PUT /api/profile/github/update`
 
 **说明**: 更新已绑定的 GitHub 用户名。仅当用户已经绑定过 GitHub 账号时可修改。
@@ -460,9 +469,16 @@ Authorization: Bearer <Token>
 ```
 
 **业务规则**:
-- 若用户未绑定过 GitHub，返回 `M3012` 错误
 - 必须先调用 `POST /api/profile/github/bind` 完成首次绑定
-- 绑定 GitHub 时自动触发技术画像认领流程（搜索已有画像 → 有则认领 → 无则从 GitHub API 生成）
+- 若未绑定过 GitHub，返回 `M3012` 错误
+- 若新 GitHub 用户名不存在，返回 `M3029` 错误
+- 换绑后自动释放旧 GitHub 的技术画像认领，创建/认领新 GitHub 的技术画像
+- 一个 GitHub 账号只能被一个用户认领
+- 换绑后自动触发异步同步拉取新 GitHub 数据
+
+**错误码**:
+- `M3012` — GitHub 账号未绑定，请先使用绑定接口
+- `M3029` — GitHub 用户不存在
 
 ---
 
@@ -493,6 +509,7 @@ Authorization: Bearer <Token>
     "totalContributions": 450,
     "topLanguages": "[\"Java\",\"Python\",\"TypeScript\"]",
     "techScore": 5128,
+    "syncStatus": "synced",
     "bio": "Full-stack developer",
     "avatarUrl": "https://avatars.githubusercontent.com/u/zhangsan",
     "lastSyncedAt": "2025-01-15T10:30:00",

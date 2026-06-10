@@ -16,6 +16,8 @@ import com.teammatch.service.TechProfileService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -39,6 +41,12 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Autowired
     private TechProfileService techProfileService;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     @Override
     public User getProfileById(Long userId) {
@@ -65,38 +73,132 @@ public class ProfileServiceImpl implements ProfileService {
     }
 
     @Override
-    @Transactional
     public void bindGithub(Long userId, String githubUsername) {
-        User user = userMapper.selectById(userId);
-        if (user == null) return;
+        // 1. 检查用户是否已绑定 GitHub
+        User currentUser = userMapper.selectById(userId);
+        if (currentUser == null) return;
 
-        user.setGithubUsername(githubUsername);
-        user.setGithubClaimed(true);
-        userMapper.updateById(user);
-
-        // 联动技术画像：搜索已有画像 → 有则认领 → 无则从 GitHub 生成并认领
-        try {
-            techProfileService.claimProfile(githubUsername, userId);
-            log.info("技术画像认领成功: userId={}, githubUsername={}", userId, githubUsername);
-        } catch (Exception e) {
-            log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
-            // 不阻断绑定流程，GitHub 绑定本身成功即可
+        if (Boolean.TRUE.equals(currentUser.getGithubClaimed())) {
+            // 已绑定：如果同一个账号则视为已更新，否则提示用更新接口
+            if (githubUsername.equals(currentUser.getGithubUsername())) {
+                log.info("GitHub 账号未变更，无需重新绑定: userId={}, githubUsername={}", userId, githubUsername);
+                return;
+            }
+            throw new com.teammatch.exception.ValidationException(ReasonCode.GITHUB_ALREADY_BOUND);
         }
+
+        // 2. 检查 GitHub 用户是否存在
+        if (!checkGitHubUserExists(githubUsername)) {
+            throw new com.teammatch.exception.NotFoundException(ReasonCode.GITHUB_USER_NOT_FOUND);
+        }
+
+        // 3. 事务内执行数据库操作
+        transactionTemplate.execute(status -> {
+            User user = userMapper.selectById(userId);
+            if (user == null) return null;
+
+            user.setGithubUsername(githubUsername);
+            user.setGithubClaimed(true);
+            userMapper.updateById(user);
+
+            try {
+                techProfileService.claimProfile(githubUsername, userId);
+                log.info("技术画像认领成功: userId={}, githubUsername={}", userId, githubUsername);
+            } catch (Exception e) {
+                log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
+            }
+            return null;
+        });
+
+        // 4. 触发异步同步
+        triggerAsyncSyncQuietly(githubUsername);
     }
 
     @Override
-    @Transactional
     public void updateGithub(Long userId, String githubUsername) {
         User user = userMapper.selectById(userId);
         if (user == null) return;
 
-        // 检查是否已经绑定过 GitHub
-        if (user.getGithubClaimed() == null || !user.getGithubClaimed()) {
-            throw new RuntimeException(ReasonCode.GITHUB_NOT_BOUND.getMessage());
+        // 检查是否已绑定 GitHub
+        if (!Boolean.TRUE.equals(user.getGithubClaimed())) {
+            throw new com.teammatch.exception.ValidationException(ReasonCode.GITHUB_NOT_BOUND);
         }
 
-        user.setGithubUsername(githubUsername);
-        userMapper.updateById(user);
+        // 同一账号换绑到同一个 → 无操作
+        if (githubUsername.equals(user.getGithubUsername())) {
+            log.info("GitHub 账号未变更: userId={}, githubUsername={}", userId, githubUsername);
+            return;
+        }
+
+        // 检查新 GitHub 用户是否存在
+        if (!checkGitHubUserExists(githubUsername)) {
+            throw new com.teammatch.exception.NotFoundException(ReasonCode.GITHUB_USER_NOT_FOUND);
+        }
+
+        // 检查新 GitHub 账号是否已被其他用户认领（事务外提前拦截，避免部分更新）
+        com.teammatch.entity.TechProfile existingProfile = techProfileService.findByGithubUsername(githubUsername);
+        if (existingProfile != null && existingProfile.isClaimed()
+                && !existingProfile.getClaimedByUserId().equals(userId)) {
+            throw new com.teammatch.exception.ValidationException(ReasonCode.TECH_PROFILE_ALREADY_CLAIMED);
+        }
+
+        String oldGithub = user.getGithubUsername();
+
+        // 事务内操作：释放旧技术画像 → 更新用户 → 认领新技术画像
+        transactionTemplate.execute(status -> {
+            // 删除旧技术画像（老数据已无用，保留最新即可）
+            com.teammatch.entity.TechProfile oldProfile = techProfileService.findByGithubUsername(oldGithub);
+            if (oldProfile != null) {
+                techProfileService.deleteTechProfile(oldProfile);
+            }
+
+            // 更新用户 GitHub 用户名
+            user.setGithubUsername(githubUsername);
+            userMapper.updateById(user);
+
+            // 认领新技术画像
+            try {
+                techProfileService.claimProfile(githubUsername, userId);
+                log.info("技术画像换绑成功: userId={}, from={}, to={}", userId, oldGithub, githubUsername);
+            } catch (Exception e) {
+                log.error("技术画像认领失败: userId={}, githubUsername={}, error={}", userId, githubUsername, e.getMessage());
+            }
+            return null;
+        });
+
+        // 触发异步同步
+        triggerAsyncSyncQuietly(githubUsername);
+    }
+
+    /**
+     * 检查 GitHub 用户名是否存在
+     */
+    /**
+     * 检查 GitHub 用户名是否存在
+     * 使用配置了超时的 RestTemplate bean（连接 3s + 读取 5s），
+     * 避免 GitHub API 响应慢时挂死 Web 线程池
+     */
+    private boolean checkGitHubUserExists(String username) {
+        try {
+            String url = String.format("https://api.github.com/users/%s", username);
+            String response = restTemplate.getForObject(url, String.class);
+            return response != null && !response.contains("Not Found");
+        } catch (Exception e) {
+            log.warn("GitHub 用户校验失败: username={}, error={}", username, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 静默触发异步同步
+     */
+    private void triggerAsyncSyncQuietly(String githubUsername) {
+        try {
+            techProfileService.triggerAsyncSync(githubUsername);
+            log.info("技术画像异步同步已触发: githubUsername={}", githubUsername);
+        } catch (Exception e) {
+            log.error("技术画像异步同步触发失败: {}", e.getMessage());
+        }
     }
 
     @Override
