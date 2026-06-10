@@ -1,5 +1,6 @@
 package com.teammatch.m6.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.teammatch.m6.constants.PenaltyType;
 import com.teammatch.m6.dto.PenaltyCreateDTO;
@@ -8,6 +9,7 @@ import com.teammatch.m6.dto.ReportHandleDTO;
 import com.teammatch.m6.entity.Report;
 import com.teammatch.m6.mapper.ReportMapper;
 import com.teammatch.exception.BusinessException;
+import com.teammatch.exception.ValidationException;
 import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.m6.service.ReportService;
 import com.teammatch.service.storage.FileCategory;
@@ -57,21 +59,21 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> impleme
 
     @Override
     public List<Report> getMyReports(Long reporterId) {
-        return presignReports(baseMapper.selectByReporterId(reporterId));
+        // 使用 BaseMapper.selectList 以正确反序列化 evidence_urls
+        return presignReports(baseMapper.selectList(
+                new LambdaQueryWrapper<Report>()
+                        .eq(Report::getReporterId, reporterId)
+                        .orderByDesc(Report::getCreatedAt)));
     }
 
     @Override
     public List<Report> getReportList(String status) {
-        List<Report> reports;
-        if (status == null || status.isEmpty()) {
-            reports = baseMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Report>()
-                            .orderByDesc(Report::getCreatedAt)
-            );
-        } else {
-            reports = baseMapper.selectByStatus(status);
+        // 同上
+        LambdaQueryWrapper<Report> wrapper = new LambdaQueryWrapper<>();
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(Report::getStatus, status);
         }
-        return presignReports(reports);
+        return presignReports(baseMapper.selectList(wrapper.orderByDesc(Report::getCreatedAt)));
     }
 
     @Override
@@ -152,8 +154,16 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> impleme
     }
 
     private Report presignReport(Report report) {
-        if (report != null) {
-            report.setEvidenceUrls(ossService.resolveAccessibleUrls(report.getEvidenceUrls()));
+        if (report == null) {
+            return null;
+        }
+        List<String> evidenceUrls = report.getEvidenceUrls();
+        if (evidenceUrls != null && !evidenceUrls.isEmpty()) {
+            try {
+                report.setEvidenceUrls(ossService.resolveAccessibleUrls(evidenceUrls));
+            } catch (ValidationException e) {
+                log.warn("举报证据 presign 失败，返回原始 URL: reportId={}", report.getId());
+            }
         }
         return report;
     }

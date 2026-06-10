@@ -146,7 +146,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 正常创建evaluation类型申诉")
     void createAppeal_evaluation_success() {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
-        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(null);
+        when(appealMapper.selectOne(any())).thenReturn(null);
         when(appealMapper.insert(any(Appeal.class))).thenAnswer(invocation -> {
             Appeal appeal = invocation.getArgument(0);
             appeal.setId(APPEAL_ID);
@@ -227,7 +227,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 正常创建penalty类型申诉")
     void createAppeal_penalty_success() {
         when(penaltyMapper.selectById(PENALTY_ID)).thenReturn(activePenalty);
-        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(null);
+        when(appealMapper.selectOne(any())).thenReturn(null);
         when(appealMapper.insert(any(Appeal.class))).thenAnswer(invocation -> {
             Appeal appeal = invocation.getArgument(0);
             appeal.setId(APPEAL_ID);
@@ -298,7 +298,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 已存在待处理申诉抛出异常")
     void createAppeal_duplicatePending_throws() {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
-        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(pendingAppeal);
+        when(appealMapper.selectOne(any())).thenReturn(pendingAppeal);
 
         AppealCreateDTO dto = new AppealCreateDTO();
         dto.setTargetType("evaluation");
@@ -316,7 +316,7 @@ class AppealServiceTest {
     @DisplayName("createAppeal: 已驳回申诉不可重复提交")
     void createAppeal_duplicateRejected_throws() {
         when(evaluationMapper.selectById(EVALUATION_ID)).thenReturn(evaluation);
-        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(rejectedAppeal);
+        when(appealMapper.selectOne(any())).thenReturn(rejectedAppeal);
 
         AppealCreateDTO dto = new AppealCreateDTO();
         dto.setTargetType("evaluation");
@@ -388,19 +388,19 @@ class AppealServiceTest {
     @Test
     @DisplayName("getMyAppeals: 返回用户的申诉列表")
     void getMyAppeals_success() {
-        when(appealMapper.selectByUserId(USER_ID))
+        when(appealMapper.selectList(any()))
                 .thenReturn(Arrays.asList(pendingAppeal, approvedAppeal));
 
         List<Appeal> result = appealService.getMyAppeals(USER_ID);
 
         assertThat(result).hasSize(2);
-        verify(appealMapper).selectByUserId(USER_ID);
+        verify(appealMapper).selectList(any());
     }
 
     @Test
     @DisplayName("getMyAppeals: 无申诉记录返回空列表")
     void getMyAppeals_empty() {
-        when(appealMapper.selectByUserId(USER_ID))
+        when(appealMapper.selectList(any()))
                 .thenReturn(Collections.emptyList());
 
         List<Appeal> result = appealService.getMyAppeals(USER_ID);
@@ -423,7 +423,7 @@ class AppealServiceTest {
     @Test
     @DisplayName("getAppealList: 按状态筛选")
     void getAppealList_byStatus() {
-        when(appealMapper.selectByStatus("pending")).thenReturn(Arrays.asList(pendingAppeal));
+        when(appealMapper.selectList(any())).thenReturn(Arrays.asList(pendingAppeal));
 
         List<Appeal> result = appealService.getAppealList("pending", null);
 
@@ -434,7 +434,7 @@ class AppealServiceTest {
     @Test
     @DisplayName("getAppealList: 按目标类型筛选")
     void getAppealList_byTargetType() {
-        when(appealMapper.selectByTargetType("penalty")).thenReturn(Arrays.asList(approvedAppeal));
+        when(appealMapper.selectList(any())).thenReturn(Arrays.asList(approvedAppeal));
 
         List<Appeal> result = appealService.getAppealList(null, "penalty");
 
@@ -708,7 +708,7 @@ class AppealServiceTest {
         project.setTitle("后端实训");
 
         when(evaluationMapper.findNormalByTargetId(USER_ID)).thenReturn(List.of(evaluation));
-        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(null);
+        when(appealMapper.selectOne(any())).thenReturn(null);
         when(projectMapper.selectById(1L)).thenReturn(project);
 
         List<AppealableEvaluationVO> result = appealService.listAppealableEvaluations(USER_ID);
@@ -722,7 +722,7 @@ class AppealServiceTest {
     @DisplayName("listAppealableEvaluations: 已申诉过的评价不返回")
     void listAppealableEvaluations_excludesAppealed() {
         when(evaluationMapper.findNormalByTargetId(USER_ID)).thenReturn(List.of(evaluation));
-        when(appealMapper.selectByTargetAndUser("evaluation", EVALUATION_ID, USER_ID)).thenReturn(rejectedAppeal);
+        when(appealMapper.selectOne(any())).thenReturn(rejectedAppeal);
 
         List<AppealableEvaluationVO> result = appealService.listAppealableEvaluations(USER_ID);
 
@@ -736,7 +736,7 @@ class AppealServiceTest {
         activePenalty.setCreatedAt(LocalDateTime.now().minusDays(1));
 
         when(penaltyMapper.selectActiveByUserId(USER_ID)).thenReturn(List.of(activePenalty));
-        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(null);
+        when(appealMapper.selectOne(any())).thenReturn(null);
 
         List<AppealablePenaltyVO> result = appealService.listAppealablePenalties(USER_ID);
 
@@ -749,7 +749,7 @@ class AppealServiceTest {
     @DisplayName("listAppealablePenalties: 已申诉过的处罚不返回")
     void listAppealablePenalties_excludesAppealed() {
         when(penaltyMapper.selectActiveByUserId(USER_ID)).thenReturn(List.of(activePenalty));
-        when(appealMapper.selectByTargetAndUser("penalty", PENALTY_ID, USER_ID)).thenReturn(approvedAppeal);
+        when(appealMapper.selectOne(any())).thenReturn(approvedAppeal);
 
         List<AppealablePenaltyVO> result = appealService.listAppealablePenalties(USER_ID);
 
@@ -761,7 +761,7 @@ class AppealServiceTest {
     @Test
     @DisplayName("getPendingAppeal: 查询存在的待处理申诉")
     void getPendingAppeal_exists() {
-        when(appealMapper.selectPendingByTarget("evaluation", EVALUATION_ID)).thenReturn(pendingAppeal);
+        when(appealMapper.selectOne(any())).thenReturn(pendingAppeal);
 
         Appeal result = appealService.getPendingAppeal("evaluation", EVALUATION_ID);
 
@@ -772,7 +772,7 @@ class AppealServiceTest {
     @Test
     @DisplayName("getPendingAppeal: 查询不存在的待处理申诉返回null")
     void getPendingAppeal_notExists() {
-        when(appealMapper.selectPendingByTarget("evaluation", EVALUATION_ID)).thenReturn(null);
+        when(appealMapper.selectOne(any())).thenReturn(null);
 
         Appeal result = appealService.getPendingAppeal("evaluation", EVALUATION_ID);
 

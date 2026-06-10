@@ -1,5 +1,6 @@
 package com.teammatch.m6.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.dto.AppealRestoreCommand;
@@ -7,6 +8,7 @@ import com.teammatch.entity.Appeal;
 import com.teammatch.entity.Evaluation;
 import com.teammatch.entity.Project;
 import com.teammatch.exception.BusinessException;
+import com.teammatch.exception.ValidationException;
 import com.teammatch.mapper.AppealMapper;
 import com.teammatch.mapper.EvaluationMapper;
 import com.teammatch.mapper.ProjectMapper;
@@ -67,7 +69,7 @@ public class AppealServiceImpl implements AppealService {
         validateTargetExistsAndBelongsToUser(dto.getTargetType(), dto.getTargetId(), userId);
 
         // 同一用户对同一目标仅允许一条申诉（V2.1 §7.4 uk_appeal_target_user）
-        Appeal existingAppeal = appealMapper.selectByTargetAndUser(
+        Appeal existingAppeal = findAppealByTargetAndUser(
                 dto.getTargetType(), dto.getTargetId(), userId);
         if (existingAppeal != null) {
             if ("pending".equals(existingAppeal.getStatus())) {
@@ -141,7 +143,7 @@ public class AppealServiceImpl implements AppealService {
     }
 
     private boolean hasAppealForTarget(String targetType, Long targetId, Long userId) {
-        return appealMapper.selectByTargetAndUser(targetType, targetId, userId) != null;
+        return findAppealByTargetAndUser(targetType, targetId, userId) != null;
     }
 
     @Override
@@ -203,31 +205,24 @@ public class AppealServiceImpl implements AppealService {
 
     @Override
     public List<Appeal> getMyAppeals(Long userId) {
-        return presignAppeals(appealMapper.selectByUserId(userId));
+        // 使用 BaseMapper.selectList 以正确反序列化 evidence_urls（@Select 不走 JacksonTypeHandler）
+        return presignAppeals(appealMapper.selectList(
+                new LambdaQueryWrapper<Appeal>()
+                        .eq(Appeal::getUserId, userId)
+                        .orderByDesc(Appeal::getCreatedAt)));
     }
 
     @Override
     public List<Appeal> getAppealList(String status, String targetType) {
-        List<Appeal> appeals;
-        // 根据条件查询
-        if (status != null && !status.isEmpty() && targetType != null && !targetType.isEmpty()) {
-            appeals = appealMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Appeal>()
-                            .eq(Appeal::getStatus, status)
-                            .eq(Appeal::getTargetType, targetType)
-                            .orderByDesc(Appeal::getCreatedAt)
-            );
-        } else if (status != null && !status.isEmpty()) {
-            appeals = appealMapper.selectByStatus(status);
-        } else if (targetType != null && !targetType.isEmpty()) {
-            appeals = appealMapper.selectByTargetType(targetType);
-        } else {
-            appeals = appealMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Appeal>()
-                            .orderByDesc(Appeal::getCreatedAt)
-            );
+        // 同上：带 evidence_urls 的列表查询须走 MyBatis-Plus 内置 SQL
+        LambdaQueryWrapper<Appeal> wrapper = new LambdaQueryWrapper<>();
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(Appeal::getStatus, status);
         }
-        return presignAppeals(appeals);
+        if (targetType != null && !targetType.isEmpty()) {
+            wrapper.eq(Appeal::getTargetType, targetType);
+        }
+        return presignAppeals(appealMapper.selectList(wrapper.orderByDesc(Appeal::getCreatedAt)));
     }
 
     @Override
@@ -315,12 +310,35 @@ public class AppealServiceImpl implements AppealService {
 
     @Override
     public Appeal getPendingAppeal(String targetType, Long targetId) {
-        return presignAppeal(appealMapper.selectPendingByTarget(targetType, targetId));
+        // selectById / selectList 才能应用 JacksonTypeHandler，@Select 自定义方法不行
+        return presignAppeal(appealMapper.selectOne(
+                new LambdaQueryWrapper<Appeal>()
+                        .eq(Appeal::getTargetType, targetType)
+                        .eq(Appeal::getTargetId, targetId)
+                        .eq(Appeal::getStatus, "pending")
+                        .last("LIMIT 1")));
+    }
+
+    private Appeal findAppealByTargetAndUser(String targetType, Long targetId, Long userId) {
+        return appealMapper.selectOne(
+                new LambdaQueryWrapper<Appeal>()
+                        .eq(Appeal::getTargetType, targetType)
+                        .eq(Appeal::getTargetId, targetId)
+                        .eq(Appeal::getUserId, userId)
+                        .last("LIMIT 1"));
     }
 
     private Appeal presignAppeal(Appeal appeal) {
-        if (appeal != null) {
-            appeal.setEvidenceUrls(ossService.resolveAccessibleUrls(appeal.getEvidenceUrls()));
+        if (appeal == null) {
+            return null;
+        }
+        List<String> evidenceUrls = appeal.getEvidenceUrls();
+        if (evidenceUrls != null && !evidenceUrls.isEmpty()) {
+            try {
+                appeal.setEvidenceUrls(ossService.resolveAccessibleUrls(evidenceUrls));
+            } catch (ValidationException e) {
+                log.warn("申诉证据 presign 失败，返回原始 URL: appealId={}", appeal.getId());
+            }
         }
         return appeal;
     }

@@ -133,20 +133,20 @@ class ReportServiceTest {
     @Test
     @DisplayName("getMyReports: 返回用户的举报列表")
     void getMyReports_success() {
-        when(reportMapper.selectByReporterId(REPORTER_ID))
+        when(reportMapper.selectList(any()))
                 .thenReturn(Arrays.asList(pendingReport, resolvedReport));
 
         List<Report> result = service.getMyReports(REPORTER_ID);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getReporterId()).isEqualTo(REPORTER_ID);
-        verify(reportMapper).selectByReporterId(REPORTER_ID);
+        verify(reportMapper).selectList(any());
     }
 
     @Test
     @DisplayName("getMyReports: 无举报记录返回空列表")
     void getMyReports_empty() {
-        when(reportMapper.selectByReporterId(REPORTER_ID))
+        when(reportMapper.selectList(any()))
                 .thenReturn(Collections.emptyList());
 
         List<Report> result = service.getMyReports(REPORTER_ID);
@@ -169,7 +169,7 @@ class ReportServiceTest {
     @Test
     @DisplayName("getReportList: 按状态筛选pending")
     void getReportList_byStatusPending() {
-        when(reportMapper.selectByStatus("pending")).thenReturn(Arrays.asList(pendingReport));
+        when(reportMapper.selectList(any())).thenReturn(Arrays.asList(pendingReport));
 
         List<Report> result = service.getReportList("pending");
 
@@ -180,7 +180,7 @@ class ReportServiceTest {
     @Test
     @DisplayName("getReportList: 按状态筛选resolved")
     void getReportList_byStatusResolved() {
-        when(reportMapper.selectByStatus("resolved")).thenReturn(Arrays.asList(resolvedReport));
+        when(reportMapper.selectList(any())).thenReturn(Arrays.asList(resolvedReport));
 
         List<Report> result = service.getReportList("resolved");
 
@@ -193,7 +193,7 @@ class ReportServiceTest {
     void getReportList_byStatusDismissed() {
         Report dismissedReport = new Report();
         dismissedReport.setStatus("dismissed");
-        when(reportMapper.selectByStatus("dismissed")).thenReturn(Arrays.asList(dismissedReport));
+        when(reportMapper.selectList(any())).thenReturn(Arrays.asList(dismissedReport));
 
         List<Report> result = service.getReportList("dismissed");
 
