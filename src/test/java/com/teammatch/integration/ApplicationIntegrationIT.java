@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 默认不跑；需 Docker 且设置环境变量 RUN_INTEGRATION_TESTS=true。
  */
 @Tag("integration")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration")
 @EnabledIfEnvironmentVariable(named = "RUN_INTEGRATION_TESTS", matches = "true")

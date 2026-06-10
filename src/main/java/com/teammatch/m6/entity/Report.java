@@ -1,11 +1,14 @@
 package com.teammatch.m6.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 举报实体类
@@ -15,7 +18,7 @@ import java.time.LocalDateTime;
  * 支持对用户(user)或项目(project)的举报
  */
 @Data
-@TableName("report")
+@TableName(value = "report", autoResultMap = true)
 public class Report {
 
     /**
@@ -44,6 +47,12 @@ public class Report {
      * 举报原因
      */
     private String reason;
+
+    /**
+     * 证据图片 URL 列表（OSS）
+     */
+    @TableField(value = "evidence_urls", typeHandler = JacksonTypeHandler.class)
+    private List<String> evidenceUrls;
 
     /**
      * 举报状态

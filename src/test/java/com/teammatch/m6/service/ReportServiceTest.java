@@ -46,6 +46,9 @@ class ReportServiceTest {
     @Mock
     private PenaltyService penaltyService;
 
+    @Mock
+    private com.teammatch.service.storage.OssService ossService;
+
     @InjectMocks
     private ReportServiceImpl service;
 
@@ -59,6 +62,8 @@ class ReportServiceTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(service, "baseMapper", reportMapper);
+        lenient().when(ossService.normalizeStoredUrls(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(ossService.resolveAccessibleUrls(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         pendingReport = new Report();
         pendingReport.setId(REPORT_ID);

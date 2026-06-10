@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 提交举报请求 DTO
  *
@@ -36,4 +38,10 @@ public class ReportCreateDTO {
     @NotBlank(message = "举报原因不能为空")
     @Size(min = 1, max = 500, message = "举报原因长度必须在1-500之间")
     private String reason;
+
+    /**
+     * 证据图片 URL 列表（先调用 POST /api/files/upload?category=report_evidence）
+     */
+    @Size(max = 5, message = "证据图片最多5张")
+    private List<String> evidenceUrls;
 }

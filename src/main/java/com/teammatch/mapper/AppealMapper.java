@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.teammatch.entity.Appeal;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.ResultMap;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -20,30 +21,35 @@ public interface AppealMapper extends BaseMapper<Appeal> {
      * 查询用户的申诉列表
      */
     @Select("SELECT * FROM appeal WHERE user_id = #{userId} ORDER BY created_at DESC")
+    @ResultMap("com.teammatch.entity.Appeal")
     List<Appeal> selectByUserId(@Param("userId") Long userId);
 
     /**
      * 按状态查询申诉列表
      */
     @Select("SELECT * FROM appeal WHERE status = #{status} ORDER BY created_at DESC")
+    @ResultMap("com.teammatch.entity.Appeal")
     List<Appeal> selectByStatus(@Param("status") String status);
 
     /**
      * 按目标类型查询申诉列表
      */
     @Select("SELECT * FROM appeal WHERE target_type = #{targetType} ORDER BY created_at DESC")
+    @ResultMap("com.teammatch.entity.Appeal")
     List<Appeal> selectByTargetType(@Param("targetType") String targetType);
 
     /**
      * 查询指定目标的待处理申诉
      */
     @Select("SELECT * FROM appeal WHERE target_type = #{targetType} AND target_id = #{targetId} AND status = 'pending' LIMIT 1")
+    @ResultMap("com.teammatch.entity.Appeal")
     Appeal selectPendingByTarget(@Param("targetType") String targetType, @Param("targetId") Long targetId);
 
     /**
      * 查询用户对指定目标是否已有申诉（含 pending/approved/rejected，对应 uk_appeal_target_user）
      */
     @Select("SELECT * FROM appeal WHERE target_type = #{targetType} AND target_id = #{targetId} AND user_id = #{userId} LIMIT 1")
+    @ResultMap("com.teammatch.entity.Appeal")
     Appeal selectByTargetAndUser(@Param("targetType") String targetType,
                                  @Param("targetId") Long targetId,
                                  @Param("userId") Long userId);

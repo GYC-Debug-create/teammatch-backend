@@ -2,7 +2,10 @@ package com.teammatch.m6.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * 申诉创建请求 DTO
@@ -27,4 +30,10 @@ public class AppealCreateDTO {
      */
     @NotBlank(message = "申诉原因不能为空")
     private String reason;
+
+    /**
+     * 证据图片 URL 列表（先调用 POST /api/files/upload?category=appeal_evidence）
+     */
+    @Size(max = 5, message = "证据图片最多5张")
+    private List<String> evidenceUrls;
 }

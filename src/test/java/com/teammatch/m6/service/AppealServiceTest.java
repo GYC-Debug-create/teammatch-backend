@@ -63,6 +63,9 @@ class AppealServiceTest {
     @Mock
     private AppealRestoreService appealRestoreService;
 
+    @Mock
+    private com.teammatch.service.storage.OssService ossService;
+
     @InjectMocks
     private AppealServiceImpl appealService;
 
@@ -132,6 +135,9 @@ class AppealServiceTest {
         activePenalty.setType("credit_deduct");
         activePenalty.setCreditDeductValue(10);
         activePenalty.setStatus("active");
+
+        lenient().when(ossService.normalizeStoredUrls(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(ossService.resolveAccessibleUrls(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     // ==================== createAppeal ====================

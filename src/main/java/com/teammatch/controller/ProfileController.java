@@ -2,6 +2,7 @@ package com.teammatch.controller;
 
 import com.teammatch.common.Result;
 import com.teammatch.dto.AddSkillTagRequest;
+import com.teammatch.dto.FileUploadResultVO;
 import com.teammatch.dto.ProfileDetailVO;
 import com.teammatch.dto.UpdateProfileRequest;
 import com.teammatch.dto.UpdateUserSkillsRequest;
@@ -9,18 +10,24 @@ import com.teammatch.entity.SkillTag;
 import com.teammatch.entity.User;
 import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
+import com.teammatch.exception.ValidationException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.ProfileService;
+import com.teammatch.service.storage.FileCategory;
+import com.teammatch.service.storage.OssService;
 import com.teammatch.util.AuthUtil;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 /**
  * M3 个人档案控制器
  */
+@Slf4j
 @RestController
 @RequestMapping("/profile")
 public class ProfileController {
@@ -34,6 +41,9 @@ public class ProfileController {
     
     @Autowired
     private AuthUtil authUtil;
+
+    @Autowired
+    private OssService ossService;
 
     /**
      * 获取指定用户的档案详情（供项目详情页显示队长/成员名称）
@@ -52,7 +62,7 @@ public class ProfileController {
                 return Result.fail(com.teammatch.common.ReasonCode.NOT_FOUND);
             }
             // 转换为 VO，只暴露安全字段
-            return Result.success(ProfileDetailVO.from(profile));
+            return Result.success(toProfileVO(profile));
         } catch (com.teammatch.exception.AuthenticationException e) {
             return Result.fail(e.getReasonCode());
         }
@@ -76,7 +86,7 @@ public class ProfileController {
             }
             
             // 转换为 VO，只暴露安全字段
-            return Result.success(ProfileDetailVO.from(profile));
+            return Result.success(toProfileVO(profile));
         } catch (com.teammatch.exception.AuthenticationException e) {
             return Result.fail(e.getReasonCode());
         }
@@ -106,6 +116,40 @@ public class ProfileController {
         } catch (com.teammatch.exception.AuthenticationException e) {
             return Result.fail(e.getReasonCode());
         }
+    }
+
+    /**
+     * 上传头像并更新档案
+     * POST /api/profile/avatar
+     */
+    @PostMapping("/avatar")
+    public Result<FileUploadResultVO> uploadAvatar(@RequestParam("file") MultipartFile file,
+                                                   @RequestHeader("Authorization") String token) {
+        try {
+            Long userId = authUtil.requireUserId(token);
+            FileUploadResultVO uploadResult = ossService.upload(FileCategory.AVATAR, userId, file);
+
+            User profile = new User();
+            profile.setAvatarUrl(uploadResult.getStoredUrl());
+            profileService.updateProfile(userId, profile);
+            return Result.success(uploadResult);
+        } catch (com.teammatch.exception.AuthenticationException e) {
+            return Result.fail(e.getReasonCode());
+        } catch (ValidationException e) {
+            return Result.of(e.getReasonCode().getCode(), e.getMessage(), null);
+        }
+    }
+
+    private ProfileDetailVO toProfileVO(User profile) {
+        ProfileDetailVO vo = ProfileDetailVO.from(profile);
+        if (vo != null && vo.getAvatarUrl() != null) {
+            try {
+                vo.setAvatarUrl(ossService.resolveAccessibleUrl(vo.getAvatarUrl()));
+            } catch (ValidationException e) {
+                log.warn("头像 presign 失败，返回原始 URL: userId={}", profile.getId());
+            }
+        }
+        return vo;
     }
 
     /**

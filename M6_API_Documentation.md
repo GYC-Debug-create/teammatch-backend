@@ -1,6 +1,6 @@
 # M6 模块（治理/举报/处罚）API 文档
 
-> 版本：master 联调版 | 接口总数：**28** | 维护：M6
+> 版本：master 联调版 | M6 接口：**28** | 文件/OSS 接口：**3** | 维护：M6
 
 ---
 
@@ -13,6 +13,7 @@ M6 负责 TeamMatch 平台**治理闭环**：板块分类、举报、处罚、�
 | **M2 Web 管理后台** | `/api/admin/*`（20 个） | 5 个后台页面：板块 / 举报 / 处罚 / 申诉 / 评价复核 |
 | **M1 小程序** | `GET /api/boards` | 创建项目时选择板块 |
 | **M1/M2 小程序用户** | `/api/reports`、`/api/appeals`、`/api/penalties` | 举报、申诉、查看自己的处罚 |
+| **M1/M2 小程序用户** | `/api/files/upload`、`/api/profile/avatar` | 上传证据截图、头像（OSS） |
 
 **业务边界（P0 冻结）**：
 - 举报对象仅 `user` / `project`，**不能**举报 evaluation
@@ -147,6 +148,113 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 }
 ```
 
+### 4.4 文件上传与 OSS（头像 / 证据截图）
+
+Bucket 为**私有**，前端**不能**直连 OSS，也**不需要**自己做 presign（签名）。  
+**上传由后端代理；展示 URL 由后端在查询响应中自动签名。**
+
+#### 4.4.1 相关接口速查
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| POST | `/api/files/upload?category=...` | 通用图片上传 |
+| POST | `/api/profile/avatar` | 上传头像并更新档案（推荐） |
+| GET | `/api/profile/detail` | 头像字段已 presign，可直接 `<img>` |
+
+`category` 取值：
+
+| category | 用途 | OSS 路径前缀 |
+|----------|------|--------------|
+| `avatar` | 用户头像 | `avatars/{userId}/` |
+| `report_evidence` | 举报证据 | `evidences/reports/{userId}/` |
+| `appeal_evidence` | 申诉证据 | `evidences/appeals/{userId}/` |
+
+#### 4.4.2 上传请求格式
+
+```
+POST /api/files/upload?category=report_evidence
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file: (图片文件，字段名必须是 file)
+```
+
+限制：**JPG / PNG / WEBP / GIF**，单文件 ≤ **5MB**。  
+Apifox 若将 Content-Type 设为 `application/octet-stream`，后端会按**文件名扩展名**识别（如 `logo.png`）。
+
+#### 4.4.3 上传响应字段（重要）
+
+```json
+{
+  "code": "00000",
+  "data": {
+    "objectKey": "evidences/reports/100/1718000000_abc.png",
+    "storedUrl": "https://teammatch.oss-cn-beijing.aliyuncs.com/evidences/reports/100/1718000000_abc.png",
+    "accessUrl": "https://teammatch.oss-cn-beijing.aliyuncs.com/...?Expires=...&Signature=..."
+  }
+}
+```
+
+| 字段 | 何时使用 |
+|------|----------|
+| **storedUrl** | **提交举报/申诉时**写入 `evidenceUrls`（入库用，无 query） |
+| **accessUrl** | 上传成功后**立即预览**（带签名，默认 24h 有效） |
+| objectKey | 调试 / 日志，前端一般可忽略 |
+
+> 提交业务表单时请用 **storedUrl**。若误传 `accessUrl`，后端会自动去掉 `?` 后参数再入库。
+
+#### 4.4.4 前端标准流程
+
+**举报带截图：**
+
+```
+1. wx.chooseMedia / 选图
+2. POST /api/files/upload?category=report_evidence  → 拿到 storedUrl
+3. POST /api/reports
+   {
+     "targetType": "user",
+     "targetId": 2,
+     "reason": "发布违规内容",
+     "evidenceUrls": ["<storedUrl>"]   // 可选，最多 5 张
+   }
+4. GET /api/reports/my 或管理端 GET /admin/reports
+   → evidenceUrls 已是 presigned，可直接渲染 <img>
+```
+
+**申诉带截图：** 将步骤 2 的 category 改为 `appeal_evidence`，步骤 3 改为 `POST /api/appeals`。
+
+**头像（推荐一步完成）：**
+
+```
+POST /api/profile/avatar
+Authorization: Bearer <token>
+Body: form-data, file=头像图片
+
+→ 自动更新 user.avatar_url；响应用 accessUrl 即时预览
+→ GET /api/profile/detail 的 avatarUrl 也已 presign
+```
+
+#### 4.4.5 presign 规则（前端无需实现）
+
+| 场景 | 谁签名 | 说明 |
+|------|--------|------|
+| 上传后立即预览 | 后端 `accessUrl` | 上传接口响应里已有 |
+| 档案头像展示 | 后端 | `GET /profile/detail` 的 `avatarUrl` |
+| 举报/申诉证据展示 | 后端 | 所有返回 `Report`/`Appeal` 的 GET/POST 响应中 `evidenceUrls` |
+| 登录响应 / 排行榜头像 | 暂未统一 presign | 若为 OSS 地址可能暂不可直链，后续可扩展 |
+
+签名有效期默认 **24 小时**（`aliyun.oss.presign-expire-hours`）。过期后**重新请求详情接口**即可拿到新链接，无需重新上传。
+
+#### 4.4.6 相关错误码
+
+| 码 | 说明 |
+|----|------|
+| M6020 | 文件上传失败 |
+| M6021 | 不支持的文件类型 |
+| M6022 | 文件超过 5MB |
+| M6023 | evidenceUrls 中的 URL 无效（非本用户上传、非本 Bucket） |
+| M6024 | 服务端 OSS 未配置 |
+
 ---
 
 ## 5. 接口详情
@@ -258,7 +366,7 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 `POST /api/reports`
 
-**Body**：
+**Body（纯文本）**：
 ```json
 {
   "targetType": "user",
@@ -267,21 +375,36 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 }
 ```
 
+**Body（带证据截图，需先上传）**：
+```json
+{
+  "targetType": "user",
+  "targetId": 100,
+  "reason": "该用户存在违规行为",
+  "evidenceUrls": [
+    "https://teammatch.oss-cn-beijing.aliyuncs.com/evidences/reports/100/1718000000_abc.png"
+  ]
+}
+```
+
 | 字段 | 约束 |
 |------|------|
 | targetType | 必填，`user` 或 `project` |
 | targetId | 必填 |
 | reason | 必填，1–500 字 |
+| evidenceUrls | 可选，最多 5 张；填上传接口返回的 **storedUrl**（见 §4.4） |
 
-**错误**：M1001（参数校验失败）
+**响应**：`Report` 对象；若有 `evidenceUrls`，**已是 presigned 可展示链接**。
+
+**错误**：M1001（参数校验失败）、M6023（证据 URL 无效）
 
 #### 8. 获取我的举报列表
 
 `GET /api/reports/my`
 
-**响应**：当前用户的举报列表，按 `createdAt` 倒序。
+**响应**：当前用户的举报列表，按 `createdAt` 倒序。`evidenceUrls` 已 presign，可直接展示。
 
-**Report 对象主要字段**：`id`, `reporterId`, `targetType`, `targetId`, `reason`, `status`（pending/resolved/dismissed）, `handlerId`, `handleResult`, `handledAt`, `createdAt`
+**Report 对象主要字段**：`id`, `reporterId`, `targetType`, `targetId`, `reason`, `evidenceUrls`, `status`（pending/resolved/dismissed）, `handlerId`, `handleResult`, `handledAt`, `createdAt`
 
 ---
 
@@ -298,6 +421,8 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 #### 10. 获取举报详情
 
 `GET /api/admin/reports/{id}`
+
+**响应**：`evidenceUrls` 已 presign，管理端可直接渲染图片。
 
 **错误**：M1002
 
@@ -438,23 +563,29 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 }
 ```
 
-**Body（对互评申诉）**：
+**Body（对互评申诉，带截图）**：
 ```json
 {
   "targetType": "evaluation",
   "targetId": 42,
-  "reason": "评价内容与事实不符"
+  "reason": "评价内容与事实不符",
+  "evidenceUrls": [
+    "https://teammatch.oss-cn-beijing.aliyuncs.com/evidences/appeals/100/1718000000_abc.png"
+  ]
 }
 ```
 
 | 规则 | 说明 |
 |------|------|
 | targetType | `evaluation`（必须是该评价的被评价人）/ `penalty`（必须是被处罚人） |
+| evidenceUrls | 可选，最多 5 张；先 `POST /files/upload?category=appeal_evidence`，填 **storedUrl** |
 | evaluation 状态 | **仅 `status=normal` 可申诉**；`pending_review` 不开放（等管理员复核）；`voided`/`kept_no_credit` 不可申诉 |
 | 唯一性 | 同一用户对同一目标**终身仅一条申诉**（含已驳回，与 `uk_appeal_target_user` 一致） |
 | 已撤销处罚 | 不可对 `revoked` 处罚申诉 |
 
-**错误**：M1001、M1003（重复申诉 / 已撤销处罚）
+**响应**：`Appeal` 对象；`evidenceUrls` 已 presign。
+
+**错误**：M1001、M1003（重复申诉 / 已撤销处罚）、M6023（证据 URL 无效）
 
 #### 19. 申诉页可申诉评价列表
 
@@ -511,11 +642,13 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 
 `GET /api/appeals/my`
 
+**响应**：`evidenceUrls` 已 presign。
+
 #### 22. 获取申诉详情
 
 `GET /api/appeals/{id}`
 
-**说明**：仅可查看**本人**提交的申诉。
+**说明**：仅可查看**本人**提交的申诉。`evidenceUrls` 已 presign。
 
 **错误**：M1002（不存在）、M1004（非本人）
 
@@ -536,6 +669,8 @@ Authorization: Bearer <JWT Token>   # 需鉴权接口必填
 #### 24. 获取申诉详情
 
 `GET /api/admin/appeals/{id}`
+
+**响应**：`evidenceUrls` 已 presign，管理端审核页可直接 `<img>` 展示证据。
 
 #### 25. 处理申诉
 

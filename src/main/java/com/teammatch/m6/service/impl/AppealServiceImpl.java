@@ -20,6 +20,8 @@ import com.teammatch.m6.mapper.PenaltyMapper;
 import com.teammatch.m6.service.AppealService;
 import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.service.AppealRestoreService;
+import com.teammatch.service.storage.FileCategory;
+import com.teammatch.service.storage.OssService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,7 @@ public class AppealServiceImpl implements AppealService {
     private final ProjectMapper projectMapper;
     private final PenaltyService penaltyService;
     private final AppealRestoreService appealRestoreService;
+    private final OssService ossService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -56,6 +59,9 @@ public class AppealServiceImpl implements AppealService {
         if (!"evaluation".equals(dto.getTargetType()) && !"penalty".equals(dto.getTargetType())) {
             throw new IllegalArgumentException("无效的申诉目标类型，必须是 evaluation 或 penalty");
         }
+
+        List<String> evidenceUrls = ossService.normalizeStoredUrls(dto.getEvidenceUrls());
+        ossService.validateEvidenceUrls(evidenceUrls, userId, FileCategory.APPEAL_EVIDENCE);
 
         // 校验目标是否存在且属于当前用户
         validateTargetExistsAndBelongsToUser(dto.getTargetType(), dto.getTargetId(), userId);
@@ -76,6 +82,7 @@ public class AppealServiceImpl implements AppealService {
         appeal.setTargetType(dto.getTargetType());
         appeal.setTargetId(dto.getTargetId());
         appeal.setReason(dto.getReason());
+        appeal.setEvidenceUrls(evidenceUrls);
         appeal.setStatus("pending");
         appeal.setCreatedAt(LocalDateTime.now());
         appeal.setUpdatedAt(LocalDateTime.now());
@@ -85,7 +92,7 @@ public class AppealServiceImpl implements AppealService {
         log.info("申诉创建成功: appealId={}, userId={}, targetType={}, targetId={}",
                 appeal.getId(), userId, dto.getTargetType(), dto.getTargetId());
 
-        return appeal;
+        return presignAppeal(appeal);
     }
 
     /**
@@ -196,31 +203,31 @@ public class AppealServiceImpl implements AppealService {
 
     @Override
     public List<Appeal> getMyAppeals(Long userId) {
-        return appealMapper.selectByUserId(userId);
+        return presignAppeals(appealMapper.selectByUserId(userId));
     }
 
     @Override
     public List<Appeal> getAppealList(String status, String targetType) {
+        List<Appeal> appeals;
         // 根据条件查询
         if (status != null && !status.isEmpty() && targetType != null && !targetType.isEmpty()) {
-            // 同时按状态和目标类型筛选
-            return appealMapper.selectList(
+            appeals = appealMapper.selectList(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Appeal>()
                             .eq(Appeal::getStatus, status)
                             .eq(Appeal::getTargetType, targetType)
                             .orderByDesc(Appeal::getCreatedAt)
             );
         } else if (status != null && !status.isEmpty()) {
-            return appealMapper.selectByStatus(status);
+            appeals = appealMapper.selectByStatus(status);
         } else if (targetType != null && !targetType.isEmpty()) {
-            return appealMapper.selectByTargetType(targetType);
+            appeals = appealMapper.selectByTargetType(targetType);
+        } else {
+            appeals = appealMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Appeal>()
+                            .orderByDesc(Appeal::getCreatedAt)
+            );
         }
-
-        // 查询全部
-        return appealMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Appeal>()
-                        .orderByDesc(Appeal::getCreatedAt)
-        );
+        return presignAppeals(appeals);
     }
 
     @Override
@@ -259,7 +266,7 @@ public class AppealServiceImpl implements AppealService {
         log.info("申诉处理完成: appealId={}, status={}, handlerId={}",
                 appealId, dto.getStatus(), handlerId);
 
-        return appeal;
+        return presignAppeal(appeal);
     }
 
     /**
@@ -303,11 +310,26 @@ public class AppealServiceImpl implements AppealService {
 
     @Override
     public Appeal getAppealById(Long appealId) {
-        return appealMapper.selectById(appealId);
+        return presignAppeal(appealMapper.selectById(appealId));
     }
 
     @Override
     public Appeal getPendingAppeal(String targetType, Long targetId) {
-        return appealMapper.selectPendingByTarget(targetType, targetId);
+        return presignAppeal(appealMapper.selectPendingByTarget(targetType, targetId));
+    }
+
+    private Appeal presignAppeal(Appeal appeal) {
+        if (appeal != null) {
+            appeal.setEvidenceUrls(ossService.resolveAccessibleUrls(appeal.getEvidenceUrls()));
+        }
+        return appeal;
+    }
+
+    private List<Appeal> presignAppeals(List<Appeal> appeals) {
+        if (appeals == null) {
+            return null;
+        }
+        appeals.forEach(this::presignAppeal);
+        return appeals;
     }
 }

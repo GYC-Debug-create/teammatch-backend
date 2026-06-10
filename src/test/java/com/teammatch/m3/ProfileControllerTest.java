@@ -13,6 +13,7 @@ import com.teammatch.exception.DuplicateDataException;
 import com.teammatch.exception.NotFoundException;
 import com.teammatch.service.AuthService;
 import com.teammatch.service.ProfileService;
+import com.teammatch.service.storage.OssService;
 import com.teammatch.util.AuthUtil;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -53,6 +54,9 @@ class ProfileControllerTest {
     @Mock
     private AuthUtil authUtil;
 
+    @Mock
+    private OssService ossService;
+
     @InjectMocks
     private ProfileController profileController;
 
@@ -70,6 +74,7 @@ class ProfileControllerTest {
         // Mock AuthUtil 的行为（使用 lenient 避免 UnnecessaryStubbingException）
         lenient().when(authUtil.requireUserId(anyString())).thenReturn(TEST_USER_ID);
         lenient().doNothing().when(authUtil).requireAdmin(anyString());
+        lenient().when(ossService.resolveAccessibleUrl(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test

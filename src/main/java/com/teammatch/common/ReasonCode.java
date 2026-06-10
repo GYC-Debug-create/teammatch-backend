@@ -96,6 +96,11 @@ public enum ReasonCode {
 
     // M6 治理错误（M60xx）
     PENALTY_SELF_NOT_ALLOWED("M6001", "不能对自己执行处罚"),
+    FILE_UPLOAD_FAILED("M6020", "文件上传失败"),
+    FILE_TYPE_NOT_ALLOWED("M6021", "不支持的文件类型，仅允许 JPG/PNG/WEBP/GIF"),
+    FILE_SIZE_EXCEEDED("M6022", "文件大小不能超过5MB"),
+    INVALID_EVIDENCE_URL("M6023", "证据图片URL无效，请先通过上传接口获取"),
+    OSS_NOT_CONFIGURED("M6024", "文件存储未配置，请联系管理员"),
 
     // 申诉恢复错误（M50xx）
     APPEAL_NOT_FOUND("M5009", "申诉记录不存在"),

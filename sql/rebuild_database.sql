@@ -335,6 +335,7 @@ CREATE TABLE IF NOT EXISTS `report` (
   `target_type` VARCHAR(32) NOT NULL COMMENT 'Target type: user/project',
   `target_id` BIGINT NOT NULL COMMENT 'Target id',
   `reason` TEXT NOT NULL COMMENT 'Report reason',
+  `evidence_urls` JSON NULL COMMENT 'Evidence image URLs',
   `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Status: pending/resolved/dismissed',
   `handler_id` BIGINT NULL COMMENT 'Admin handler id',
   `handle_result` VARCHAR(500) NULL COMMENT 'Handle result',
@@ -355,6 +356,7 @@ CREATE TABLE IF NOT EXISTS `appeal` (
   `target_type` VARCHAR(32) NOT NULL COMMENT 'Target type: evaluation/penalty',
   `target_id` BIGINT NOT NULL COMMENT 'Target id',
   `reason` TEXT NOT NULL COMMENT 'Appeal reason',
+  `evidence_urls` JSON NULL COMMENT 'Evidence image URLs',
   `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'Status: pending/approved/rejected',
   `handler_id` BIGINT NULL COMMENT 'Admin handler id',
   `handle_result` VARCHAR(500) NULL COMMENT 'Handle result',
@@ -395,7 +397,7 @@ CREATE TABLE IF NOT EXISTS `penalty` (
 
 -- 3.1 插入管理员用户（密码：<密码>，BCrypt 加密）
 INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `role`, `status`, `credit_score`, `formal_profile_completed`) VALUES
-('admin_openid_001', '系统管理员', 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@teammatch.edu.cn', 1, 'TeamMatch大学', 'admin', 'active', 100, 1);
+('admin_openid_001', '系统管理员', 'admin', '$2b$10$rKRygML6RzRxmaLjiRQMOufNGpg9jdMiQHJqJJ0t6gdcf2vPwwdkK', 'admin@teammatch.edu.cn', 1, 'TeamMatch大学', 'admin', 'active', 100, 1);
 
 -- 3.2 插入普通用户
 INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `major`, `grade`, `bio`, `github_username`, `github_claimed`, `gitee_username`, `gitee_claimed`, `credit_score`, `formal_profile_completed`, `status`) VALUES

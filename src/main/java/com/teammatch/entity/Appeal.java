@@ -1,11 +1,17 @@
 package com.teammatch.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
+
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 申诉记录实体
  * M5-7 只使用查询相关字段，完整申诉系统由 M6 构建
  */
+@TableName(value = "appeal", autoResultMap = true)
 public class Appeal {
 
     /** 申诉记录ID */
@@ -22,6 +28,10 @@ public class Appeal {
 
     /** 申诉原因 */
     private String reason;
+
+    /** 证据图片 URL 列表（OSS） */
+    @TableField(value = "evidence_urls", typeHandler = JacksonTypeHandler.class)
+    private List<String> evidenceUrls;
 
     /** 申诉状态: pending / approved / rejected */
     private String status;
@@ -79,6 +89,14 @@ public class Appeal {
 
     public void setReason(String reason) {
         this.reason = reason;
+    }
+
+    public List<String> getEvidenceUrls() {
+        return evidenceUrls;
+    }
+
+    public void setEvidenceUrls(List<String> evidenceUrls) {
+        this.evidenceUrls = evidenceUrls;
     }
 
     public String getStatus() {

@@ -10,6 +10,8 @@ import com.teammatch.m6.mapper.ReportMapper;
 import com.teammatch.exception.BusinessException;
 import com.teammatch.m6.service.PenaltyService;
 import com.teammatch.m6.service.ReportService;
+import com.teammatch.service.storage.FileCategory;
+import com.teammatch.service.storage.OssService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,40 +31,47 @@ import java.util.List;
 public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> implements ReportService {
 
     private final PenaltyService penaltyService;
+    private final OssService ossService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Report createReport(Long reporterId, ReportCreateDTO dto) {
+        List<String> evidenceUrls = ossService.normalizeStoredUrls(dto.getEvidenceUrls());
+        ossService.validateEvidenceUrls(evidenceUrls, reporterId, FileCategory.REPORT_EVIDENCE);
+
         // 创建举报实体
         Report report = new Report();
         report.setReporterId(reporterId);
         report.setTargetType(dto.getTargetType());
         report.setTargetId(dto.getTargetId());
         report.setReason(dto.getReason());
+        report.setEvidenceUrls(evidenceUrls);
         report.setStatus("pending");
         report.setCreatedAt(LocalDateTime.now());
         report.setUpdatedAt(LocalDateTime.now());
 
         // 保存到数据库
         baseMapper.insert(report);
-        return report;
+        return presignReport(report);
     }
 
     @Override
     public List<Report> getMyReports(Long reporterId) {
-        return baseMapper.selectByReporterId(reporterId);
+        return presignReports(baseMapper.selectByReporterId(reporterId));
     }
 
     @Override
     public List<Report> getReportList(String status) {
+        List<Report> reports;
         if (status == null || status.isEmpty()) {
-            // 查询全部，按状态和时间排序
-            return baseMapper.selectList(
+            reports = baseMapper.selectList(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Report>()
                             .orderByDesc(Report::getCreatedAt)
             );
+        } else {
+            reports = baseMapper.selectByStatus(status);
         }
-        return baseMapper.selectByStatus(status);
+        return presignReports(reports);
     }
 
     @Override
@@ -95,7 +104,7 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> impleme
             createPenaltyFromReport(report, handlerId, dto);
         }
 
-        return report;
+        return presignReport(report);
     }
 
     private void validatePenaltyLinkage(ReportHandleDTO dto, Report report) {
@@ -139,6 +148,21 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, Report> impleme
 
     @Override
     public Report getReportById(Long reportId) {
-        return baseMapper.selectById(reportId);
+        return presignReport(baseMapper.selectById(reportId));
+    }
+
+    private Report presignReport(Report report) {
+        if (report != null) {
+            report.setEvidenceUrls(ossService.resolveAccessibleUrls(report.getEvidenceUrls()));
+        }
+        return report;
+    }
+
+    private List<Report> presignReports(List<Report> reports) {
+        if (reports == null) {
+            return null;
+        }
+        reports.forEach(this::presignReport);
+        return reports;
     }
 }

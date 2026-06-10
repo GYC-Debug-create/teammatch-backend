@@ -3,6 +3,7 @@ package com.teammatch.m6.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.teammatch.m6.entity.Report;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.ResultMap;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public interface ReportMapper extends BaseMapper<Report> {
      * @return 举报列表
      */
     @Select("SELECT * FROM report WHERE reporter_id = #{reporterId} ORDER BY created_at DESC")
+    @ResultMap("com.teammatch.m6.entity.Report")
     List<Report> selectByReporterId(Long reporterId);
 
     /**
@@ -30,6 +32,7 @@ public interface ReportMapper extends BaseMapper<Report> {
      * @return 待处理举报列表
      */
     @Select("SELECT * FROM report WHERE status = 'pending' ORDER BY created_at ASC")
+    @ResultMap("com.teammatch.m6.entity.Report")
     List<Report> selectPendingReports();
 
     /**
@@ -39,5 +42,6 @@ public interface ReportMapper extends BaseMapper<Report> {
      * @return 举报列表
      */
     @Select("SELECT * FROM report WHERE status = #{status} ORDER BY created_at DESC")
+    @ResultMap("com.teammatch.m6.entity.Report")
     List<Report> selectByStatus(String status);
 }
