@@ -74,8 +74,8 @@ class TeamRequestControllerTest {
     }
 
     @Test
-    @DisplayName("sendInvite: 重复 pending 请求时返回 STATUS_CONFLICT")
-    void sendInvite_duplicatePending_returnsConflict() throws Exception {
+    @DisplayName("sendInvite: 重复 pending 请求时返回 M4_DUPLICATE_PENDING_REQUEST")
+    void sendInvite_duplicatePending_returnsDuplicatePendingRequest() throws Exception {
         TeamRequestDTO dto = new TeamRequestDTO();
         dto.setProjectId(1L);
         dto.setFromUserId(10L);
@@ -88,7 +88,25 @@ class TeamRequestControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_DUPLICATE_PENDING_REQUEST.getCode()));
+    }
+
+    @Test
+    @DisplayName("sendInvite: 用户已在项目中时返回 M4_USER_ALREADY_IN_PROJECT")
+    void sendInvite_userAlreadyInProject_returnsUserAlreadyInProject() throws Exception {
+        TeamRequestDTO dto = new TeamRequestDTO();
+        dto.setProjectId(1L);
+        dto.setFromUserId(10L);
+        dto.setToUserId(20L);
+
+        doThrow(new RuntimeException("USER_ALREADY_IN_PROJECT"))
+            .when(teamRequestService).sendRequest(any(TeamRequestDTO.class), eq("invite"));
+
+        mockMvc.perform(post("/m4/team-requests/invite")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_USER_ALREADY_IN_PROJECT.getCode()));
     }
 
     // ------------------------------------------------------------------ T-123

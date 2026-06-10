@@ -84,6 +84,8 @@ public enum ReasonCode {
     M4_LEADER_CANNOT_EXIT("M4009", "队长不能退出，请先转让队长身份"),
     INVALID_PENALTY_LEVEL("INVALID_PENALTY_LEVEL", "处罚级别缺失或不合法"),
     M4_TEAM_VOTE_CONFLICT("TEAM_VOTE_CONFLICT", "退出操作冲突，请重试"),
+    M4_DUPLICATE_PENDING_REQUEST("M4012", "已有待处理的请求"),
+    M4_USER_ALREADY_IN_PROJECT("M4013", "用户已在项目中"),
 
     // M6 治理错误（M60xx）
     PENALTY_SELF_NOT_ALLOWED("M6001", "不能对自己执行处罚"),
