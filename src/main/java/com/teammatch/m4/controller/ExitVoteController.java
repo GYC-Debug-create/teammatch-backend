@@ -150,7 +150,7 @@ public class ExitVoteController {
             return ReasonCode.M4_MEMBER_NOT_ACTIVE;
         }
         if ("不能对队长发起退出投票".equals(message)) {
-            return ReasonCode.STATUS_CONFLICT;
+            return ReasonCode.M4_CANNOT_VOTE_LEADER;
         }
         if ("INVALID_PENALTY_LEVEL".equals(message)) {
             return ReasonCode.INVALID_PENALTY_LEVEL;
@@ -173,7 +173,7 @@ public class ExitVoteController {
             return ReasonCode.M4_MEMBER_NOT_ACTIVE;
         }
         if ("目标成员不能参与自己的退出投票".equals(message)) {
-            return ReasonCode.STATUS_CONFLICT;
+            return ReasonCode.M4_CANNOT_VOTE_SELF;
         }
         return ReasonCode.UNKNOWN_ERROR;
     }
