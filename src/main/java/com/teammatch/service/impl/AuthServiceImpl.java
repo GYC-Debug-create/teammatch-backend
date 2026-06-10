@@ -211,7 +211,16 @@ public class AuthServiceImpl implements AuthService {
         
         Long userId = getUserIdFromToken(token);
         
-        // 2. 60秒防刷检查
+        // 2. 检查该邮箱是否已被其他用户认证绑定
+        LambdaQueryWrapper<User> emailCheck = new LambdaQueryWrapper<>();
+        emailCheck.eq(User::getEmail, request.getEmail())
+                .eq(User::getEmailVerified, true);
+        User emailOwner = userMapper.selectOne(emailCheck);
+        if (emailOwner != null && !emailOwner.getId().equals(userId)) {
+            throw new DuplicateDataException(ReasonCode.EMAIL_OCCUPIED);
+        }
+
+        // 3. 60秒防刷检查
         String sendLimitKey = SEND_LIMIT_PREFIX + userId;
         Boolean exists = redisTemplate.hasKey(sendLimitKey);
         if (Boolean.TRUE.equals(exists)) {
@@ -249,13 +258,20 @@ public class AuthServiceImpl implements AuthService {
         if (storedCode != null && storedCode.equals(request.getCode())) {
             redisTemplate.delete(key);
             
-            // 检查该邮箱是否已被其他用户占用
+            // 检查该邮箱是否已被其他用户占用或已认证
             LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(User::getEmail, request.getEmail());
             User existingUser = userMapper.selectOne(wrapper);
             
-            if (existingUser != null && !existingUser.getId().equals(userId)) {
-                throw new DuplicateDataException(ReasonCode.EMAIL_OCCUPIED);
+            if (existingUser != null) {
+                // 如果邮箱已被其他用户绑定，禁止重复绑定
+                if (!existingUser.getId().equals(userId)) {
+                    throw new DuplicateDataException(ReasonCode.EMAIL_OCCUPIED);
+                }
+                // 如果邮箱已被当前用户认证过，禁止重复绑定
+                if (Boolean.TRUE.equals(existingUser.getEmailVerified())) {
+                    throw new DuplicateDataException(ReasonCode.EMAIL_ALREADY_VERIFIED);
+                }
             }
             
             User user = userMapper.selectById(userId);

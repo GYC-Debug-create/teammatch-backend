@@ -149,6 +149,9 @@ public class AuthController {
         } catch (ValidationException e) {
             // 参数校验异常（邮箱格式错误、发送过于频繁等）
             return Result.fail(e.getReasonCode());
+        } catch (DuplicateDataException e) {
+            // 邮箱已被其他用户认证绑定
+            return Result.fail(e.getReasonCode());
         } catch (RuntimeException e) {
             // 邮件发送失败
             if (e.getMessage() != null && e.getMessage().contains(ReasonCode.EMAIL_SEND_FAILED.getMessage())) {
