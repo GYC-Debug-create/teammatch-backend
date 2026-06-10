@@ -21,7 +21,7 @@ public class TeamRequestController {
             teamRequestService.sendRequest(dto, "invite");
             return Result.success();
         } catch (Exception e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return handleException(e);
         }
     }
 
@@ -32,7 +32,7 @@ public class TeamRequestController {
             teamRequestService.sendRequest(dto, "apply");
             return Result.success();
         } catch (Exception e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return handleException(e);
         }
     }
 
@@ -43,7 +43,7 @@ public class TeamRequestController {
             teamRequestService.acceptRequest(id, operatorId);
             return Result.success();
         } catch (Exception e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return handleException(e);
         }
     }
 
@@ -54,7 +54,7 @@ public class TeamRequestController {
             teamRequestService.rejectRequest(id, operatorId);
             return Result.success();
         } catch (Exception e) {
-            return Result.fail(ReasonCode.STATUS_CONFLICT);
+            return handleException(e);
         }
     }
 
@@ -75,6 +75,18 @@ public class TeamRequestController {
             @RequestParam Long userId,
             @RequestParam(defaultValue = "received") String direction) {
         return Result.success(teamRequestService.getRequestList(userId, direction));
+    }
+
+    private Result<Void> handleException(Exception e) {
+        if (e.getMessage() != null) {
+            if (e.getMessage().contains("DUPLICATE_PENDING_REQUEST")) {
+                return Result.fail(ReasonCode.M4_DUPLICATE_PENDING_REQUEST);
+            }
+            if (e.getMessage().contains("USER_ALREADY_IN_PROJECT")) {
+                return Result.fail(ReasonCode.M4_USER_ALREADY_IN_PROJECT);
+            }
+        }
+        return Result.fail(ReasonCode.STATUS_CONFLICT);
     }
 }
 

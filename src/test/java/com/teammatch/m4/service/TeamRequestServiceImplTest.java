@@ -62,8 +62,8 @@ class TeamRequestServiceImplTest {
     @DisplayName("sendRequest invite: 正常流程 → 保存 pending 请求")
     void sendRequest_invite_success() {
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
-        // 第一次：active 成员数 2；第二次：leader 数 1
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 1L);
+        // 第一次：active 成员数 2；第二次：leader 数 1；第三次：目标成员数 0
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 1L, 0L);
         when(teamRequestMapper.selectCount(any())).thenReturn(0L); // 无重复
         when(teamRequestMapper.insert(any(TeamRequest.class))).thenReturn(1);
 
@@ -121,7 +121,7 @@ class TeamRequestServiceImplTest {
     @DisplayName("sendRequest invite: 已有 pending 重复请求 → 抛 DUPLICATE_PENDING_REQUEST")
     void sendRequest_invite_duplicatePending_throws() {
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 1L);
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 1L, 0L);
         when(teamRequestMapper.selectCount(any())).thenReturn(1L); // 有重复
 
         assertThatThrownBy(() -> service.sendRequest(inviteDto(), "invite"))
@@ -135,7 +135,7 @@ class TeamRequestServiceImplTest {
     @DisplayName("sendRequest apply: 正常流程 → 保存 pending 申请")
     void sendRequest_apply_success() {
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L); // active 成员数
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 0L); // active 成员数
         when(teamRequestMapper.selectCount(any())).thenReturn(0L); // 无重复
         when(teamRequestMapper.insert(any(TeamRequest.class))).thenReturn(1);
 
@@ -148,7 +148,7 @@ class TeamRequestServiceImplTest {
     @DisplayName("sendRequest apply: 已有 pending 重复申请 → 抛 DUPLICATE_PENDING_REQUEST")
     void sendRequest_apply_duplicatePending_throws() {
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L);
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 0L);
         when(teamRequestMapper.selectCount(any())).thenReturn(1L);
 
         assertThatThrownBy(() -> service.sendRequest(applyDto(), "apply"))
@@ -164,7 +164,7 @@ class TeamRequestServiceImplTest {
         TeamRequest req = inviteRequest(); // type=invite, fromUserId=LEADER_ID, toUserId=INVITEE_ID
         when(teamRequestMapper.selectById(REQUEST_ID)).thenReturn(req);
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L); // active < max
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(2L, 0L); // active < max
         when(teamMemberService.save(any(TeamMember.class))).thenReturn(true);
         when(teamRequestMapper.updateById(any(TeamRequest.class))).thenReturn(1);
 
@@ -180,8 +180,8 @@ class TeamRequestServiceImplTest {
     void acceptRequest_apply_success() {
         TeamRequest req = applyRequest(); // type=apply, fromUserId=APPLICANT_ID, toUserId=LEADER_ID
         when(teamRequestMapper.selectById(REQUEST_ID)).thenReturn(req);
-        // 第一次：leader count=1；第二次：active count=2
-        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(1L, 2L);
+        // 第一次：leader count=1；第二次：active count=2；第三次：目标成员数 0
+        when(teamMemberService.count(any(LambdaQueryWrapper.class))).thenReturn(1L, 2L, 0L);
         when(projectService.getById(PROJECT_ID)).thenReturn(recruitingProject(5));
         when(teamMemberService.save(any(TeamMember.class))).thenReturn(true);
         when(teamRequestMapper.updateById(any(TeamRequest.class))).thenReturn(1);
