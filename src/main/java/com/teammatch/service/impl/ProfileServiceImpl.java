@@ -106,6 +106,11 @@ public class ProfileServiceImpl implements ProfileService {
 
             user.setGithubUsername(githubUsername);
             user.setGithubClaimed(true);
+            // 切换平台时清除旧平台绑定
+            if (Boolean.TRUE.equals(user.getGiteeClaimed())) {
+                user.setGiteeUsername(null);
+                user.setGiteeClaimed(false);
+            }
             userMapper.updateById(user);
 
             try {
@@ -229,6 +234,11 @@ public class ProfileServiceImpl implements ProfileService {
 
             user.setGiteeUsername(giteeUsername);
             user.setGiteeClaimed(true);
+            // 切换平台时清除旧平台绑定
+            if (Boolean.TRUE.equals(user.getGithubClaimed())) {
+                user.setGithubUsername(null);
+                user.setGithubClaimed(false);
+            }
             userMapper.updateById(user);
 
             try {
