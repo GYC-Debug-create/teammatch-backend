@@ -7,7 +7,9 @@ import com.teammatch.m4.dto.ProjectCreateDTO;
 import com.teammatch.m4.entity.Project;
 import com.teammatch.m4.entity.TeamMember;
 import com.teammatch.m4.service.ProjectService;
+import com.teammatch.m4.service.ProjectSkillService;
 import com.teammatch.m4.service.TeamMemberService;
+import com.teammatch.mapper.SkillTagMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +40,12 @@ class ProjectControllerTest {
 
     @MockBean
     private TeamMemberService teamMemberService;
+
+    @MockBean
+    private ProjectSkillService projectSkillService;
+
+    @MockBean
+    private SkillTagMapper skillTagMapper;
 
     // ------------------------------------------------------------------ T-113
 

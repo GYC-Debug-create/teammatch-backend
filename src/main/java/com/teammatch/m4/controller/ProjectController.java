@@ -6,11 +6,18 @@ import com.teammatch.common.ReasonCode;
 import com.teammatch.common.Result;
 import com.teammatch.m4.dto.ProjectCreateDTO;
 import com.teammatch.m4.entity.Project;
+import com.teammatch.m4.entity.ProjectSkill;
 import com.teammatch.m4.entity.TeamMember;
 import com.teammatch.m4.service.ProjectService;
+import com.teammatch.m4.service.ProjectSkillService;
 import com.teammatch.m4.service.TeamMemberService;
+import com.teammatch.entity.SkillTag;
+import com.teammatch.mapper.SkillTagMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/m4/projects")
@@ -19,6 +26,8 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final TeamMemberService teamMemberService;
+    private final ProjectSkillService projectSkillService;
+    private final SkillTagMapper skillTagMapper;
 
     /** T-113 创建项目 */
     @PostMapping
@@ -52,6 +61,13 @@ public class ProjectController {
         Project project = projectService.getById(id);
         if (project == null) {
             return Result.fail(ReasonCode.M4_PROJECT_NOT_FOUND);
+        }
+        // 填充技能标签
+        List<Long> skillTagIds = projectSkillService.list(
+                new LambdaQueryWrapper<ProjectSkill>().eq(ProjectSkill::getProjectId, id))
+                .stream().map(ProjectSkill::getSkillTagId).collect(Collectors.toList());
+        if (!skillTagIds.isEmpty()) {
+            project.setSkills(skillTagMapper.selectBatchIds(skillTagIds));
         }
         return Result.success(project);
     }

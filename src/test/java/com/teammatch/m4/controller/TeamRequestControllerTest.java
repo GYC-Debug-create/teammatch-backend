@@ -56,7 +56,7 @@ class TeamRequestControllerTest {
     }
 
     @Test
-    @DisplayName("sendInvite: 项目非招募状态时返回 STATUS_CONFLICT")
+    @DisplayName("sendInvite: 项目非招募状态时返回 M4003")
     void sendInvite_projectNotRecruiting_returnsConflict() throws Exception {
         TeamRequestDTO dto = new TeamRequestDTO();
         dto.setProjectId(1L);
@@ -70,7 +70,7 @@ class TeamRequestControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_PROJECT_STATUS_INVALID.getCode()));
     }
 
     @Test
@@ -132,7 +132,7 @@ class TeamRequestControllerTest {
     }
 
     @Test
-    @DisplayName("sendApply: 项目已满员时返回 STATUS_CONFLICT")
+    @DisplayName("sendApply: 项目已满员时返回 M4007")
     void sendApply_projectFull_returnsConflict() throws Exception {
         TeamRequestDTO dto = new TeamRequestDTO();
         dto.setProjectId(1L);
@@ -146,7 +146,7 @@ class TeamRequestControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_TEAM_FULL.getCode()));
     }
 
     // ------------------------------------------------------------------ T-124
@@ -164,14 +164,14 @@ class TeamRequestControllerTest {
     }
 
     @Test
-    @DisplayName("acceptRequest: 请求状态不合法时返回 STATUS_CONFLICT")
+    @DisplayName("acceptRequest: 请求状态不合法时返回 M4014")
     void acceptRequest_invalidStatus_returnsConflict() throws Exception {
-        doThrow(new RuntimeException("该请求不是 pending 状态"))
+        doThrow(new RuntimeException("该请求已处理"))
             .when(teamRequestService).acceptRequest(1L, 10L);
 
         mockMvc.perform(post("/m4/team-requests/1/accept").param("operatorId", "10"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_REQUEST_ALREADY_HANDLED.getCode()));
     }
 
     // ------------------------------------------------------------------ T-129
@@ -189,14 +189,14 @@ class TeamRequestControllerTest {
     }
 
     @Test
-    @DisplayName("rejectRequest: 非接收方操作时返回 STATUS_CONFLICT")
+    @DisplayName("rejectRequest: 非接收方操作时返回 M4015")
     void rejectRequest_notReceiver_returnsConflict() throws Exception {
-        doThrow(new RuntimeException("只有接收方可以拒绝请求"))
+        doThrow(new RuntimeException("无权操作此请求"))
             .when(teamRequestService).rejectRequest(1L, 99L);
 
         mockMvc.perform(post("/m4/team-requests/1/reject").param("operatorId", "99"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.code").value(ReasonCode.STATUS_CONFLICT.getCode()));
+            .andExpect(jsonPath("$.code").value(ReasonCode.M4_UNAUTHORIZED_REQUEST.getCode()));
     }
 
     // ------------------------------------------------------------------ T-130
