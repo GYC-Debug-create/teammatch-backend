@@ -379,6 +379,7 @@ class AuthServiceImplTest {
         existingUser.setId(TEST_USER_ID);
         existingUser.setOpenid("real-openid-abc123");
         existingUser.setNickname("ExistingUser");
+        existingUser.setStatus("active");
         when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingUser);
 
         User result = authService.wechatLogin(request);
@@ -437,6 +438,7 @@ class AuthServiceImplTest {
         existingUser.setId(TEST_USER_ID);
         existingUser.setOpenid("mock-openid-123");
         existingUser.setNickname("ExistingUser");
+        existingUser.setStatus("active");
 
         when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existingUser);
 

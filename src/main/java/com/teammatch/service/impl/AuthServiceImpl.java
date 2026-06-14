@@ -131,6 +131,8 @@ public class AuthServiceImpl implements AuthService {
             user.setStatus("active");
             userMapper.insert(user);
             log.info("新用户通过微信登录创建: openid={}", openid);
+        } else if (!"active".equals(user.getStatus())) {
+            throw new AuthenticationException(ReasonCode.ACCOUNT_BANNED, "账号已被封禁");
         }
 
         return user;
@@ -152,6 +154,8 @@ public class AuthServiceImpl implements AuthService {
             user.setRole("user");
             user.setStatus("active");
             userMapper.insert(user);
+        } else if (!"active".equals(user.getStatus())) {
+            throw new AuthenticationException(ReasonCode.ACCOUNT_BANNED, "账号已被封禁");
         }
         return user;
     }
