@@ -3,8 +3,10 @@ package com.teammatch.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.teammatch.common.Result;
 import com.teammatch.dto.UserBadgesVO;
+import com.teammatch.entity.Project;
 import com.teammatch.entity.Evaluation;
 import com.teammatch.mapper.EvaluationMapper;
+import com.teammatch.mapper.ProjectMapper;
 import com.teammatch.mapper.TeamMemberMapper;
 import com.teammatch.m4.entity.ExitVote;
 import com.teammatch.m4.entity.ExitVoteRecord;
@@ -20,7 +22,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +51,9 @@ public class MeController {
 
     @Autowired
     private TeamMemberMapper teamMemberMapper;
+
+    @Autowired
+    private ProjectMapper projectMapper;
 
     /**
      * 获取当前用户的角标聚合
@@ -93,26 +100,47 @@ public class MeController {
             }
         }
 
-        // 3. 统计待完成的互评（简化版：统计用户活跃项目中其他成员数，
-        // 减去用户已提交的 evaluation 记录数）
+        // 3. 统计待完成的互评：过滤出 ended 且尚未截止的项目，批量拉取数据在内存中计算差集
         int pendingEvaluations = 0;
         if (!projectIds.isEmpty()) {
-            // 获取所有 active 项目中的其他成员总数
-            long totalOtherMembers = 0;
-            for (Long pid : projectIds) {
-                LambdaQueryWrapper<TeamMember> otherMembers = new LambdaQueryWrapper<>();
-                otherMembers.eq(TeamMember::getProjectId, pid)
+            // ① 批量查出用户所有 active 的项目详情
+            List<Project> activeProjects = projectMapper.selectList(new LambdaQueryWrapper<Project>()
+                    .in(Project::getId, projectIds));
+
+            // ② 内存过滤：筛选出 status='ended' 且互评窗口尚未过期的项目 ID
+            // 注意：此处的 now 是后端时间；用于兜底拦截“已过期且懒更新未触发”的项目，避免误报红点。
+            LocalDateTime now = LocalDateTime.now();
+            List<Long> endedProjectIds = activeProjects.stream()
+                    .filter(p -> "ended".equals(p.getStatus()))
+                    .filter(p -> p.getEvalDeadline() != null && !now.isAfter(p.getEvalDeadline()))
+                    .map(Project::getId)
+                    .collect(Collectors.toList());
+
+            if (!endedProjectIds.isEmpty()) {
+                // ③ 批量拉取当前用户在这些 ended 项目下已提交的所有评价（避免 N+1 查询）
+                List<Evaluation> evalsGiven = evaluationMapper.selectList(new LambdaQueryWrapper<Evaluation>()
+                        .eq(Evaluation::getEvaluatorId, userId)
+                        .in(Evaluation::getProjectId, endedProjectIds));
+                
+                // 映射成联合键 projectId:targetId
+                Set<String> evaluatedKeys = evalsGiven.stream()
+                        .map(e -> e.getProjectId() + ":" + e.getTargetId())
+                        .collect(Collectors.toSet());
+
+                // ④ 批量查出这些项目中的所有其他 active 成员（避免嵌套循环内的 N+1 查询）
+                List<TeamMember> otherMembers = teamMemberMapper.selectList(new LambdaQueryWrapper<TeamMember>()
+                        .in(TeamMember::getProjectId, endedProjectIds)
                         .eq(TeamMember::getStatus, "active")
-                        .ne(TeamMember::getUserId, userId);
-                totalOtherMembers += teamMemberMapper.selectCount(otherMembers);
+                        .ne(TeamMember::getUserId, userId));
+
+                // ⑤ 内存计算差集：累计未评价的成员数
+                for (TeamMember member : otherMembers) {
+                    String key = member.getProjectId() + ":" + member.getUserId();
+                    if (!evaluatedKeys.contains(key)) {
+                        pendingEvaluations++;
+                    }
+                }
             }
-
-            // 用户已提交的评价数
-            LambdaQueryWrapper<Evaluation> evalGiven = new LambdaQueryWrapper<>();
-            evalGiven.eq(Evaluation::getEvaluatorId, userId);
-            long totalGiven = evaluationMapper.selectCount(evalGiven);
-
-            pendingEvaluations = Math.max(0, (int) (totalOtherMembers - totalGiven));
         }
 
         return Result.success(new UserBadgesVO((int) pendingInvites, pendingVotes, pendingEvaluations));

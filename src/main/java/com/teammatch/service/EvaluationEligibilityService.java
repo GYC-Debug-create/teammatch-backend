@@ -57,12 +57,18 @@ public class EvaluationEligibilityService {
             return Result.fail(ReasonCode.NOT_PROJECT_MEMBER);
         }
 
-        // 3. 检查项目状态是否为 ended
-        if (!"ended".equals(project.getStatus())) {
+        String status = project.getStatus();
+        // 3. 限制项目状态：必须是 ended（互评中）或 eval_closed（互评已截止）之一
+        if (!"ended".equals(status) && !"eval_closed".equals(status)) {
             return Result.fail(ReasonCode.PROJECT_NOT_ENDED);
         }
 
-        // 4. 检查当前时间是否在互评窗口内（evalDeadline 之前或等于）
+        // 4. 状态短路校验：如果已经是 eval_closed 状态，直接短路返回“窗口已关闭”
+        if ("eval_closed".equals(status)) {
+            return Result.fail(ReasonCode.EVAL_WINDOW_CLOSED);
+        }
+
+        // 5. 互评时间窗口懒检查：若 eval_deadline 到期，则自动触发状态更新
         LocalDateTime evalDeadline = project.getEvalDeadline();
         if (evalDeadline == null) {
             return Result.fail(ReasonCode.EVAL_WINDOW_CLOSED);

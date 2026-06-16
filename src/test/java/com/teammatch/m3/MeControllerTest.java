@@ -12,6 +12,8 @@ import com.teammatch.m4.entity.ExitVoteRecord;
 import com.teammatch.m4.entity.TeamRequest;
 import com.teammatch.m4.mapper.M4ExitVoteMapper;
 import com.teammatch.m4.mapper.M4ExitVoteRecordMapper;
+import com.teammatch.entity.Project;
+import com.teammatch.mapper.ProjectMapper;
 import com.teammatch.m4.mapper.M4TeamRequestMapper;
 import com.teammatch.util.AuthUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +58,9 @@ class MeControllerTest {
 
     @Mock
     private TeamMemberMapper teamMemberMapper;
+
+    @Mock
+    private ProjectMapper projectMapper;
 
     @InjectMocks
     private MeController meController;
@@ -103,6 +108,7 @@ class MeControllerTest {
         membership.setUserId(USER_ID);
         List<TeamMember> memberships = Collections.singletonList(membership);
         when(teamMemberMapper.selectList(any())).thenReturn(memberships);
+        when(projectMapper.selectList(any())).thenReturn(Collections.emptyList());
 
         // 有一个进行中的退出投票
         ExitVote activeVote = new ExitVote();
@@ -130,6 +136,7 @@ class MeControllerTest {
         membership.setProjectId(100L);
         membership.setUserId(USER_ID);
         when(teamMemberMapper.selectList(any())).thenReturn(Collections.singletonList(membership));
+        when(projectMapper.selectList(any())).thenReturn(Collections.emptyList());
 
         ExitVote activeVote = new ExitVote();
         activeVote.setId(10L);
@@ -145,5 +152,52 @@ class MeControllerTest {
         Result<UserBadgesVO> result = meController.getBadges(TOKEN);
 
         assertThat(result.getData().getPendingVotes()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("有已结束项目且有未评成员时应正确计数待互评数")
+    void getBadges_shouldCountPendingEvaluations_whenProjectEnded() {
+        // 1. 用户在一个活跃项目中
+        TeamMember membership = new TeamMember();
+        membership.setProjectId(100L);
+        membership.setUserId(USER_ID);
+        List<TeamMember> memberships = Collections.singletonList(membership);
+
+        // 2. 项目列表中包含该项目且状态为 ended，尚未过期
+        Project project = new Project();
+        project.setId(100L);
+        project.setStatus("ended");
+        project.setEvalDeadline(java.time.LocalDateTime.now().plusDays(1));
+
+        // 3. 有 2 个其他活跃成员 (200L 和 300L)
+        TeamMember m1 = new TeamMember();
+        m1.setProjectId(100L);
+        m1.setUserId(200L);
+        m1.setStatus("active");
+        TeamMember m2 = new TeamMember();
+        m2.setProjectId(100L);
+        m2.setUserId(300L);
+        m2.setStatus("active");
+
+        // mock 成员查询的连续返回值 (第一次查自己的项目，第二次查项目的所有活跃成员)
+        when(teamMemberMapper.selectList(any()))
+                .thenReturn(memberships)
+                .thenReturn(Arrays.asList(m1, m2));
+
+        when(projectMapper.selectList(any())).thenReturn(Collections.singletonList(project));
+
+        // 4. 用户已提交的评价数（只评了 200L，300L 未评）
+        Evaluation eval = new Evaluation();
+        eval.setProjectId(100L);
+        eval.setEvaluatorId(USER_ID);
+        eval.setTargetId(200L);
+        when(evaluationMapper.selectList(any())).thenReturn(Collections.singletonList(eval));
+
+        when(teamRequestMapper.selectCount(any())).thenReturn(0L);
+
+        Result<UserBadgesVO> result = meController.getBadges(TOKEN);
+
+        assertThat(result.getData().getPendingEvaluations()).isEqualTo(1); // 200L已评，300L未评，应为1
+        assertThat(result.getData().getTotal()).isEqualTo(1);
     }
 }

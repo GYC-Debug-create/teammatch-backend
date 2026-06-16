@@ -202,6 +202,24 @@ class EvaluationEligibilityServiceTest {
         verify(projectMapper, never()).updateStatusToEvalClosed(any());
     }
 
+    @Test
+    @DisplayName("M5-1A：项目状态为 eval_closed 时直接短路返回窗口关闭")
+    void testCheckProjectEligibility_StatusEvalClosed() {
+        // Given：项目已经是 eval_closed 状态
+        project.setStatus("eval_closed");
+        when(projectMapper.selectById(projectId)).thenReturn(project);
+        when(teamMemberMapper.findActiveMember(userId, projectId)).thenReturn(teamMember);
+
+        // When
+        Result<Boolean> result = service.checkProjectEligibility(userId, projectId);
+
+        // Then
+        assertThat(result.isFail()).isTrue();
+        assertThat(result.getCode()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getCode());
+        assertThat(result.getMessage()).isEqualTo(ReasonCode.EVAL_WINDOW_CLOSED.getMessage());
+        verify(projectMapper, never()).updateStatusToEvalClosed(any());
+    }
+
     // ==================== M5-1B：待评价成员列表判断 ====================
     // 等价类划分：
     // 1. 项目级资格检查失败 → 返回对应错误码
