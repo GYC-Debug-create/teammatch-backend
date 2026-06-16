@@ -20,5 +20,4 @@ public class TeamRequest {
     private LocalDateTime handledAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private String pendingDedupeKey;
 }
