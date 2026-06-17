@@ -1,6 +1,7 @@
 package com.teammatch.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.teammatch.dto.EndorsementPoint;
 import com.teammatch.entity.Evaluation;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -112,4 +113,32 @@ public interface EvaluationMapper extends BaseMapper<Evaluation> {
      */
     @Select("SELECT * FROM evaluation WHERE target_id = #{targetId} AND status = 'normal' ORDER BY created_at DESC")
     List<Evaluation> findNormalByTargetId(@Param("targetId") Long targetId);
+
+    // ==================== M4 推荐模块新增 ====================
+
+    /**
+     * 批量查多个被评价人的互评技术维度打分,JOIN user 取评价者信誉分
+     * <p>
+     * 用于 M4 推荐精排层:避免循环里 N 次单查,一次 SQL 拿全部候选人的加权点。
+     * 只取 status='normal' 的有效互评。
+     * </p>
+     *
+     * @param targetUserIds 被评价人用户 ID 列表(候选人)
+     * @return EndorsementPoint 列表,字段 targetUserId 用于业务层 groupingBy 分组
+     */
+    @Select("<script>" +
+            "SELECT e.skill_score        AS skillScore, " +
+            "       u.credit_score       AS evaluatorCreditScore, " +
+            "       e.evaluator_id       AS evaluatorId, " +
+            "       e.target_id          AS targetUserId " +
+            "FROM evaluation e " +
+            "JOIN `user` u ON e.evaluator_id = u.id " +
+            "WHERE e.target_id IN " +
+            "  <foreach collection='targetUserIds' item='id' open='(' separator=',' close=')'>" +
+            "    #{id}" +
+            "  </foreach> " +
+            "  AND e.status = 'normal' " +
+            "ORDER BY e.target_id, e.created_at DESC" +
+            "</script>")
+    List<EndorsementPoint> findSkillScoresByTargets(@Param("targetUserIds") List<Long> targetUserIds);
 }
