@@ -12,7 +12,7 @@ SET NAMES utf8mb4;
 
 -- 1. user: M3 user authentication/profile base, shared by M4/M5/M6.
 CREATE TABLE IF NOT EXISTS `user` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `id` BIGINT NOT NULL COMMENT 'Primary key（随机ID，非自增）',
   `openid` VARCHAR(128) NULL COMMENT 'WeChat openid for mini-program users',
   `nickname` VARCHAR(64) NULL COMMENT 'User nickname',
   `avatar_url` VARCHAR(512) NULL COMMENT 'Avatar URL',

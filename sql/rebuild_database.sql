@@ -36,7 +36,7 @@ SET NAMES utf8mb4;
 
 -- user 表
 CREATE TABLE IF NOT EXISTS `user` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `id` BIGINT NOT NULL COMMENT 'Primary key（随机ID，非自增）',
   `openid` VARCHAR(128) NULL COMMENT 'WeChat openid for mini-program users',
   `nickname` VARCHAR(64) NULL COMMENT 'User nickname',
   `avatar_url` VARCHAR(512) NULL COMMENT 'Avatar URL',
@@ -396,16 +396,16 @@ CREATE TABLE IF NOT EXISTS `penalty` (
 -- ============================================
 
 -- 3.1 插入管理员用户（密码：<密码>，BCrypt 加密）
-INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `role`, `status`, `credit_score`, `formal_profile_completed`) VALUES
-('admin_openid_001', '系统管理员', 'admin', '$2b$10$rKRygML6RzRxmaLjiRQMOufNGpg9jdMiQHJqJJ0t6gdcf2vPwwdkK', 'admin@teammatch.edu.cn', 1, 'TeamMatch大学', 'admin', 'active', 100, 1);
+INSERT INTO `user` (`id`, `openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `role`, `status`, `credit_score`, `formal_profile_completed`) VALUES
+(1, 'admin_openid_001', '系统管理员', 'admin', '$2b$10$rKRygML6RzRxmaLjiRQMOufNGpg9jdMiQHJqJJ0t6gdcf2vPwwdkK', 'admin@teammatch.edu.cn', 1, 'TeamMatch大学', 'admin', 'active', 100, 1);
 
 -- 3.2 插入普通用户
-INSERT INTO `user` (`openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `major`, `grade`, `bio`, `github_username`, `github_claimed`, `gitee_username`, `gitee_claimed`, `credit_score`, `formal_profile_completed`, `status`) VALUES
-('mock_wx_code_user_a', '张三', 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@example.edu.cn', 1, '清华大学', '计算机科学与技术', '2023级', '热爱编程，寻找队友一起做项目', 'zhangsan-github', 1, NULL, 0, 100, 1, 'active'),
-('mock_wx_code_user_b', '李四', 'lisi', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@example.edu.cn', 1, '北京大学', '软件工程', '2022级', '前端开发爱好者', 'lisi-github', 1, NULL, 0, 95, 1, 'active'),
-('mock_wx_code_user_c', '王五', 'wangwu', NULL, 'wangwu@example.edu.cn', 1, '复旦大学', '人工智能', '2023级', 'AI方向研究生', 'wangwu-github', 1, NULL, 0, 100, 1, 'active'),
-('mock_wx_code_user_d', '赵六', 'zhaoliu', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 100, 0, 'active'),
-('mock_wx_code_user_e', '孙七', 'sunqi', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 80, 0, 'banned');
+INSERT INTO `user` (`id`, `openid`, `nickname`, `username`, `password_hash`, `email`, `email_verified`, `school`, `major`, `grade`, `bio`, `github_username`, `github_claimed`, `gitee_username`, `gitee_claimed`, `credit_score`, `formal_profile_completed`, `status`) VALUES
+(2, 'mock_wx_code_user_a', '张三', 'zhangsan', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@example.edu.cn', 1, '清华大学', '计算机科学与技术', '2023级', '热爱编程，寻找队友一起做项目', 'zhangsan-github', 1, NULL, 0, 100, 1, 'active'),
+(3, 'mock_wx_code_user_b', '李四', 'lisi', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@example.edu.cn', 1, '北京大学', '软件工程', '2022级', '前端开发爱好者', 'lisi-github', 1, NULL, 0, 95, 1, 'active'),
+(4, 'mock_wx_code_user_c', '王五', 'wangwu', NULL, 'wangwu@example.edu.cn', 1, '复旦大学', '人工智能', '2023级', 'AI方向研究生', 'wangwu-github', 1, NULL, 0, 100, 1, 'active'),
+(5, 'mock_wx_code_user_d', '赵六', 'zhaoliu', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 100, 0, 'active'),
+(6, 'mock_wx_code_user_e', '孙七', 'sunqi', NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, 0, NULL, 0, 80, 0, 'banned');
 
 -- 3.2a 插入技术画像数据（供排行榜使用）
 INSERT INTO `tech_profile` (`github_username`, `source`, `claimed_by_user_id`, `total_stars`, `total_repos`, `total_commits`, `total_prs`, `total_contributions`, `top_languages`, `tech_score`, `bio`, `avatar_url`, `sync_status`, `last_synced_at`) VALUES
