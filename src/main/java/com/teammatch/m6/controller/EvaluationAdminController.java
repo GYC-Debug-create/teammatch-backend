@@ -39,29 +39,56 @@ public class EvaluationAdminController {
     private final EvaluationMapper evaluationMapper;
 
     /**
-     * 查询待复核评价列表。
+     * 查询评价复核列表（支持按状态筛选，行为与申诉/举报列表一致）。
      *
-     * GET /api/admin/evaluations/pending?projectId={optional}
+     * GET /api/admin/evaluations?status={optional}&projectId={optional}
+     *
+     * status 为空或 all 时不按状态过滤；可传 pending_review / normal / voided / kept_no_credit。
+     */
+    @GetMapping
+    public Result<List<PendingEvaluationVO>> listEvaluations(
+            @RequestHeader("Authorization") String token,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long projectId) {
+        authUtil.requireAdmin(token);
+        return Result.success(queryEvaluations(status, projectId, false));
+    }
+
+    /**
+     * 查询待复核评价列表（兼容旧路径）。
+     *
+     * GET /api/admin/evaluations/pending?status={optional}&projectId={optional}
+     *
+     * 未传 status 时默认仅返回 pending_review；传空字符串或 all 时返回全部状态。
      */
     @GetMapping("/pending")
     public Result<List<PendingEvaluationVO>> getPendingEvaluations(
             @RequestHeader("Authorization") String token,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) Long projectId) {
         authUtil.requireAdmin(token);
+        return Result.success(queryEvaluations(status, projectId, true));
+    }
 
+    private List<PendingEvaluationVO> queryEvaluations(String status, Long projectId, boolean pendingEndpoint) {
         LambdaQueryWrapper<Evaluation> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Evaluation::getStatus, Evaluation.STATUS_PENDING_REVIEW);
+        if (hasStatusFilter(status)) {
+            wrapper.eq(Evaluation::getStatus, status);
+        } else if (pendingEndpoint && status == null) {
+            wrapper.eq(Evaluation::getStatus, Evaluation.STATUS_PENDING_REVIEW);
+        }
         if (projectId != null) {
             wrapper.eq(Evaluation::getProjectId, projectId);
         }
         wrapper.orderByDesc(Evaluation::getCreatedAt);
 
-        List<Evaluation> evaluations = evaluationMapper.selectList(wrapper);
-        List<PendingEvaluationVO> voList = evaluations.stream()
+        return evaluationMapper.selectList(wrapper).stream()
                 .map(this::toPendingEvaluationVO)
                 .collect(Collectors.toList());
+    }
 
-        return Result.success(voList);
+    private boolean hasStatusFilter(String status) {
+        return status != null && !status.isEmpty() && !"all".equalsIgnoreCase(status);
     }
 
     /**

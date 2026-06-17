@@ -1,5 +1,6 @@
 package com.teammatch.entity;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
  * M5 模块负责维护此表
  * 用于存储项目结束后的四维互评数据：沟通、任务、技能、责任
  */
+@TableName("evaluation")
 public class Evaluation {
     public static final String STATUS_NORMAL = "normal";
     public static final String STATUS_PENDING_REVIEW = "pending_review";

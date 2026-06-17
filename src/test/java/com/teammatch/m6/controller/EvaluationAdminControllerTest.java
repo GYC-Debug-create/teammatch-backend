@@ -220,6 +220,53 @@ class EvaluationAdminControllerTest {
                 .andExpect(jsonPath("$.data[0].projectId").value(PROJECT_ID.intValue()));
     }
 
+    @Test
+    @DisplayName("B1: status=all 时返回全部状态评价")
+    void getPendingEvaluations_statusAll_returnsAll() throws Exception {
+        Evaluation normalEval = new Evaluation();
+        normalEval.setId(3L);
+        normalEval.setProjectId(PROJECT_ID);
+        normalEval.setEvaluatorId(11L);
+        normalEval.setTargetId(21L);
+        normalEval.setStatus(Evaluation.STATUS_NORMAL);
+        normalEval.setCreatedAt(LocalDateTime.now());
+
+        when(evaluationMapper.selectList(any())).thenReturn(Arrays.asList(pendingEval1, normalEval));
+
+        mockMvc.perform(get("/admin/evaluations/pending")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .param("status", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("B1: GET /admin/evaluations 默认不按状态过滤")
+    void listEvaluations_withoutStatus_returnsAll() throws Exception {
+        when(evaluationMapper.selectList(any())).thenReturn(Arrays.asList(pendingEval1, pendingEval2));
+
+        mockMvc.perform(get("/admin/evaluations")
+                        .header("Authorization", ADMIN_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("B1: GET /admin/evaluations 可按 status 筛选")
+    void listEvaluations_withStatus_filters() throws Exception {
+        when(evaluationMapper.selectList(any())).thenReturn(Arrays.asList(pendingEval1));
+
+        mockMvc.perform(get("/admin/evaluations")
+                        .header("Authorization", ADMIN_TOKEN)
+                        .param("status", Evaluation.STATUS_PENDING_REVIEW))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].status").value("pending_review"));
+    }
+
     // ==================== B2: 执行复核 ====================
 
     @Test
