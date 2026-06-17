@@ -1,5 +1,7 @@
 package com.teammatch.m3;
 
+import com.baomidou.mybatisplus.core.incrementer.DefaultIdentifierGenerator;
+import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.teammatch.entity.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DisplayName("M3 User 实体测试")
 class UserEntityTest {
+
+    private final IdentifierGenerator idGenerator = new DefaultIdentifierGenerator();
+
+    @Test
+    @DisplayName("Snowflake 生成的 ID 应始终为正数且 >= 10^15（15位以上）")
+    void snowflakeId_shouldBeLargePositive() {
+        for (int i = 0; i < 100; i++) {
+            Long id = idGenerator.nextId(new User()).longValue();
+            assertThat(id).isPositive();
+            assertThat(id.toString().length()).isGreaterThanOrEqualTo(15);
+        }
+    }
+
+    @Test
+    @DisplayName("Snowflake 生成的 ID 不应重复")
+    void snowflakeId_shouldNotCollide() {
+        java.util.HashSet<Long> ids = new java.util.HashSet<>();
+        for (int i = 0; i < 1000; i++) {
+            Long id = idGenerator.nextId(new User()).longValue();
+            assertThat(ids).doesNotContain(id);
+            ids.add(id);
+        }
+    }
 
     @Test
     @DisplayName("updateFormalProfileCompleted - 邮箱已验证、昵称和学校不为空时应标记为完成")
