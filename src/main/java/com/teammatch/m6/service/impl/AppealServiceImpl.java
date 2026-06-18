@@ -282,7 +282,7 @@ public class AppealServiceImpl implements AppealService {
             }
 
             PenaltyRevokeDTO revokeDTO = new PenaltyRevokeDTO();
-            revokeDTO.setReason("申诉通过: " + (dto.getHandleResult() != null ? dto.getHandleResult() : "经审核，撤销处罚"));
+            revokeDTO.setReason(dto.getHandleResult() != null ? dto.getHandleResult() : "经审核，撤销处罚");
 
             try {
                 penaltyService.revokePenalty(appeal.getTargetId(), appeal.getHandlerId(), revokeDTO);

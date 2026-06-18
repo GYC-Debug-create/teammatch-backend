@@ -262,7 +262,8 @@ public class EvaluationSubmitServiceImpl implements EvaluationSubmitService {
         cc.setEffective(effective);
         cc.setSourceType("evaluation");
         cc.setSourceId(evaluation.getId());
-        cc.setDescription("项目互评信誉变化");
+        int delta = creditResult.getCappedDelta();
+        cc.setDescription("项目" + evaluation.getProjectId() + "互评: " + (delta >= 0 ? "+" : "") + delta + "分");
         return cc;
     }
 }

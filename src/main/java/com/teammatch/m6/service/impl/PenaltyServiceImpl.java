@@ -95,7 +95,7 @@ public class PenaltyServiceImpl extends ServiceImpl<PenaltyMapper, Penalty> impl
             creditChange.setEffective(true);
             creditChange.setSourceType(CreditChangeType.SOURCE_TYPE_PENALTY);
             creditChange.setSourceId(penalty.getId());
-            creditChange.setDescription("处罚扣分: " + dto.getReason());
+            creditChange.setDescription(dto.getReason());
             creditChange.setCreatedAt(LocalDateTime.now());
             creditChange.setUpdatedAt(LocalDateTime.now());
 
@@ -158,7 +158,7 @@ public class PenaltyServiceImpl extends ServiceImpl<PenaltyMapper, Penalty> impl
             creditChange.setEffective(true);
             creditChange.setSourceType(CreditChangeType.SOURCE_TYPE_PENALTY);
             creditChange.setSourceId(penalty.getId());
-            creditChange.setDescription("处罚撤销恢复: " + dto.getReason());
+            creditChange.setDescription(dto.getReason());
             creditChange.setCreatedAt(LocalDateTime.now());
             creditChange.setUpdatedAt(LocalDateTime.now());
 

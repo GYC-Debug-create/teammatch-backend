@@ -127,7 +127,7 @@ public class AppealRestoreServiceImpl implements AppealRestoreService {
         restore.setEffective(true);
         restore.setSourceType(TARGET_TYPE_EVALUATION);
         restore.setSourceId(evaluation.getId());
-        restore.setDescription("申诉恢复 - 原评价流水#" + original.getId());
+        restore.setDescription("原评价流水#" + original.getId() + "扣分撤回");
         int inserted = creditChangeMapper.insert(restore);
         if (inserted != 1) {
             throw new BusinessException(ReasonCode.UNKNOWN_ERROR, "插入appeal_restore流水失败");
