@@ -83,7 +83,7 @@ aliyun:
 # 本地默认 localhost；线上由 application-prod.yml 或环境变量覆盖
 gitee:
   oauth:
-    client-id: ${GITEE_CLIENT_ID:35e2baa69dd9c4bf2e7c06e496e6e2b918530ad757780b17bd4bb6ea8120658c}
+    client-id: ${GITEE_CLIENT_ID:}
     client-secret: ${GITEE_CLIENT_SECRET:}
     redirect-uri: ${GITEE_REDIRECT_URI:http://localhost:8080/api/profile/gitee/callback}
     scope: user_info projects pull_requests
